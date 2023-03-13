@@ -3,4 +3,22 @@ project(fractal_generator)
 
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(fractal_generator main.cpp)
+set(CMAKE_PREFIX_PATH opt/homebrew/include)
+
+include_directories(/opt/homebrew/include/)
+
+# open gl include
+find_package(OpenGL REQUIRED COMPONENTS OpenGL)
+
+# glew include
+find_package(GLEW REQUIRED)
+
+# glfw include
+find_package(glfw3 REQUIRED)
+
+# glm include
+find_package(glm REQUIRED)
+
+add_executable(${PROJECT_NAME} main.cpp) #The name of the cpp file and its path can vary
+
+target_link_libraries(${PROJECT_NAME} OpenGL::GL GLEW::glew glfw)
