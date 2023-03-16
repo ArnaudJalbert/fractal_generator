@@ -6,6 +6,7 @@
 
 #include "init.h"
 
+using namespace std;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height){
     glViewport(0, 0, width, height);
@@ -28,14 +29,32 @@ void initWindowHint(){
 
 }
 
-unsigned int initVertexShader(){
+std::string readShaderFile(const char* filePath)
+{
+    std::ifstream shaderFile(filePath);
+    if (!shaderFile.is_open()) {
+        // handle error
+        return "";
+    }
+
+    std::stringstream shaderStream;
+    shaderStream << shaderFile.rdbuf();
+    shaderFile.close();
+
+    return shaderStream.str();
+}
+
+unsigned int initVertexShader(const string& shaderSource){
+
+    const char* source = shaderSource.c_str();
 
     // vertex shader init
     unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glShaderSource(vertexShader, 1, &source, NULL);
     glCompileShader(vertexShader);
 
     // check for shader compile errors
+    char infoLog[512];
     glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
     if (!success)
     {
@@ -46,13 +65,16 @@ unsigned int initVertexShader(){
     return vertexShader;
 }
 
-unsigned int initFragmentShader(){
+unsigned int initFragmentShader(const string& shaderSource){
+
+    const char* source = shaderSource.c_str();
 
     // fragment shader
     unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glShaderSource(fragmentShader, 1, &source, NULL);
     glCompileShader(fragmentShader);
     // check for shader compile errors
+    char infoLog[512];
     glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
     if (!success)
     {
@@ -70,6 +92,7 @@ unsigned int linkShaders(unsigned int vertexShader, unsigned int fragmentShader)
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
     // check for linking errors
+    char infoLog[512];
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
     if (!success) {
         glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
@@ -80,6 +103,7 @@ unsigned int linkShaders(unsigned int vertexShader, unsigned int fragmentShader)
 
     return shaderProgram;
 }
+
 int main(){
 
     glfwInit();
@@ -113,33 +137,43 @@ int main(){
     // callbacks
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-    // shaders init
-    unsigned int vertexShader = initVertexShader();
+    // storing shader information in a string
+    string fragmentShaderSource = readShaderFile("../fragmentShader.glsl");
 
-    unsigned int fragmentShader = initFragmentShader();
+    string vertexShaderSource = readShaderFile("../vertexShader.glsl");
+
+    // shaders init
+    unsigned int vertexShader = initVertexShader(vertexShaderSource);
+
+    unsigned int fragmentShader = initFragmentShader(fragmentShaderSource);
 
     // link shaders
     unsigned int shaderProgram = linkShaders(vertexShader, fragmentShader);
 
-    float vertices[] = {
-            // first triangle
-            0.5f,  0.5f, 0.0f,  // top right
-            0.5f, -0.5f, 0.0f,  // bottom right
-            -0.5f,  0.5f, 0.0f,  // top left
-            // second triangle
-            0.5f, -0.5f, 0.0f,  // bottom right
-            -0.5f, -0.5f, 0.0f,  // bottom left
-            -0.5f,  0.5f, 0.0f   // top left
+    // geometry
+    // Only used vertices are the corners of the screen.
+    GLfloat vertices[] = {
+            -1.0f, -1.0f,
+            -1.0f,  1.0f,
+            1.0f, -1.0f,
+            1.0f,  1.0f
     };
 
-    unsigned int VBO, VAO;
+
+
+    // VBO -> Vertex Buffer Object, VAO -> Vertex Array Object, EBO -> Element Buffer Object
+    unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
     // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
     glBindVertexArray(VAO);
 
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
@@ -154,7 +188,6 @@ int main(){
     // uncomment this call to draw in wireframe polygons.
     //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-
     // window loop
     while(!glfwWindowShouldClose(window))
     {
@@ -166,14 +199,21 @@ int main(){
         // --------
 
         // bg
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // triangle
         glUseProgram(shaderProgram);
-        glBindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
-        glDrawArrays(GL_TRIANGLES, 0, 6); // set the count to 6 since we're drawing 6 vertices now (2 triangles); not 3!
-        // glBindVertexArray(0); // no need to unbind it every time
+
+        // ---- Project ----
+        int widthLocation = glGetUniformLocation(shaderProgram, "resolution");
+        glUseProgram(shaderProgram);
+        glUniform4f(widthLocation, 0.0f, WIDTH, 0.0f, 1.0f);
+
+        int heightLocation = glGetUniformLocation(shaderProgram, "resolution");
+        glUseProgram(shaderProgram);
+        glUniform4f(heightLocation, 0.0f, HEIGHT, 0.0f, 1.0f);
+
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
