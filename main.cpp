@@ -128,11 +128,8 @@ int main(){
         return -1;
     }
 
-    // this is where we set up opengl before starting it
+    // init the opengl window
     glViewport(0, 0, WIDTH, HEIGHT);
-
-    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
 
     // callbacks
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -149,44 +146,54 @@ int main(){
 
     // link shaders
     unsigned int shaderProgram = linkShaders(vertexShader, fragmentShader);
+    glUseProgram(shaderProgram);
 
-    // geometry
-    // Only used vertices are the corners of the screen.
-    GLfloat vertices[] = {
-            -1.0f, -1.0f,
-            -1.0f,  1.0f,
-            1.0f, -1.0f,
-            1.0f,  1.0f
+    float vertices[] = {
+            0.5f,  0.5f, 0.0f,  // top right
+            0.5f, -0.5f, 0.0f,  // bottom right
+            -0.5f, -0.5f, 0.0f,  // bottom left
+            -0.5f,  0.5f, 0.0f   // top left
+    };
+    unsigned int indices[] = {
+            0, 1, 3,   // first triangle
+            1, 2, 3    // second triangle
     };
 
+    // create VAO and VBO
+    unsigned int VAO, VBO, EBO;
 
-
-    // VBO -> Vertex Buffer Object, VAO -> Vertex Array Object, EBO -> Element Buffer Object
-    unsigned int VBO, VAO, EBO;
+    // creating the vertex array
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
     glGenBuffers(1, &EBO);
-    // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
+
+    // binding arrays
     glBindVertexArray(VAO);
 
+    // creating the vertex buffers
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
+    // setting the vertex buffer
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    // setting the element buffer object
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-    // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
-    // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
-    glBindVertexArray(0);
+    // addresses of all the uniforms of the shader program
+    GLint resolutionLocation = glGetUniformLocation(shaderProgram, "u_resolution");
+    GLint cameraUpLocation = glGetUniformLocation(shaderProgram, "u_cameraUp");
+    GLint cameraRightLocation = glGetUniformLocation(shaderProgram, "u_cameraRight");
+    GLint cameraForwardLocation = glGetUniformLocation(shaderProgram, "u_cameraForward");
+    GLint cameraPositionLocation = glGetUniformLocation(shaderProgram, "u_cameraPosition");
+    GLint focalLengthLocation = glGetUniformLocation(shaderProgram, "u_focalLength");
+    GLint aspectRatioLocation = glGetUniformLocation(shaderProgram, "u_aspectRatio");
 
-    // uncomment this call to draw in wireframe polygons.
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    // sending resolution to the shader
+    glUniform2i(resolutionLocation, float(WIDTH), float(HEIGHT));
+    glUniform1f(aspectRatioLocation, float(WIDTH)/float(HEIGHT));
 
     // window loop
     while(!glfwWindowShouldClose(window))
@@ -198,21 +205,13 @@ int main(){
         // commands
         // --------
 
-        // bg
+        glUseProgram(shaderProgram);
+
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        // triangle
-        glUseProgram(shaderProgram);
-
-        // ---- Project ----
-        int widthLocation = glGetUniformLocation(shaderProgram, "resolution");
-        glUseProgram(shaderProgram);
-        glUniform4f(widthLocation, 0.0f, WIDTH, 0.0f, 1.0f);
-
-        int heightLocation = glGetUniformLocation(shaderProgram, "resolution");
-        glUseProgram(shaderProgram);
-        glUniform4f(heightLocation, 0.0f, HEIGHT, 0.0f, 1.0f);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)

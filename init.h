@@ -14,6 +14,7 @@
 #include <glm/glm.hpp>
 
 using namespace std;
+using namespace glm;
 
 #define MAJOR_VERSION 3
 #define MINOR_VERSION 3
