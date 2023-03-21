@@ -17,5 +17,5 @@ void main()
     vec3 col;
     render(col, uv);
 
-    FragColor = vec4(gl_FragCoord);
+    FragColor = vec4(uv,0.5,1);
 }

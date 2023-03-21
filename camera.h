@@ -1,0 +1,8 @@
+//
+// Created by Arnaud Jalbert on 2023-03-21.
+//
+
+#ifndef FRACTAL_GENERATOR_CAMERA_H
+#define FRACTAL_GENERATOR_CAMERA_H
+
+#endif //FRACTAL_GENERATOR_CAMERA_H

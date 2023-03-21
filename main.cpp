@@ -148,11 +148,12 @@ int main(){
     unsigned int shaderProgram = linkShaders(vertexShader, fragmentShader);
     glUseProgram(shaderProgram);
 
+    // basic rectangle th
     float vertices[] = {
-            0.5f,  0.5f, 0.0f,  // top right
-            0.5f, -0.5f, 0.0f,  // bottom right
-            -0.5f, -0.5f, 0.0f,  // bottom left
-            -0.5f,  0.5f, 0.0f   // top left
+            1,  1, -1,  // top right
+            1,  -1, -1,  // bottom right
+            -1,  -1, -1,  // bottom left
+            -1,  1, -1,   // top left
     };
     unsigned int indices[] = {
             0, 1, 3,   // first triangle
@@ -207,7 +208,7 @@ int main(){
 
         glUseProgram(shaderProgram);
 
-        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
