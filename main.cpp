@@ -1,8 +1,3 @@
-//
-// Created by Arnaud Jalbert on 2023-03-12.
-//
-
-// https://learnopengl.com/Getting-started/Hello-Triangle
 
 #include "init.h"
 #include "camera.h"

@@ -1,6 +1,3 @@
-//
-// Created by Arnaud Jalbert on 2023-03-12.
-//
 
 #ifndef FRACTAL_GENERATOR_INIT_H
 #define FRACTAL_GENERATOR_INIT_H
