@@ -1,14 +1,14 @@
 #version 330 core
 
 #define MAX_RAYMARCH_STEPS 1024
-#define EPSILON 0.0001f
+#define EPSILON 0.001f
 #define MAX_DISTANCE 150
 #define INFINITY 999999999
 #define NORMAL_OFFSET vec2(EPSILON, 0)
 #define FLOOR_PLANE_NORMAL vec3(0,1,0)
 #define MIN_SHADOW 1
 #define MAX_SHADOW 5
-#define PENUMBRA_FACTOR 16
+#define PENUMBRA_FACTOR 8
 
 smooth in vec3 fragPosition; // position of the fragment
 out vec4 outColor;
@@ -39,7 +39,7 @@ n: normal of the plane(normalized) -> vec3
 */
 float floorPlane( vec3 p, vec3 n)
 {
-    return dot(p,n) + 0.6;
+    return dot(p,n) + 0.75;
 }
 
 /*

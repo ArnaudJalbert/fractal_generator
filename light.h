@@ -4,7 +4,7 @@
 
 #include "init.h"
 
-vec3 lightPosition = vec3(0,2,0);
+vec3 lightPosition = vec3(2,3,1);
 
 float lightIntensity = 1.0f;
 
