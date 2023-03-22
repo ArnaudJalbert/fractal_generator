@@ -1,14 +1,23 @@
 #version 330 core
 
-#define MAX_RAYMARCH_STEPS 1024
-#define EPSILON 0.001f
+// raymarch settings
+#define MAX_RAYMARCH_STEPS 2048
+#define EPSILON 0.000001f
 #define MAX_DISTANCE 150
+// utils
 #define INFINITY 999999999
+// normals
 #define NORMAL_OFFSET vec2(EPSILON, 0)
+// geometry
 #define FLOOR_PLANE_NORMAL vec3(0,1,0)
+// shadows
 #define MIN_SHADOW 1
 #define MAX_SHADOW 5
 #define PENUMBRA_FACTOR 8
+// ambient occlusion
+#define AO_STEPS 10
+#define AO_STEP_SIZE 0.01f
+#define AO_INTENSITY 1.0f
 
 smooth in vec3 fragPosition; // position of the fragment
 out vec4 outColor;
@@ -51,7 +60,7 @@ float map(vec3 p){
     // current smallest distance
     float d = INFINITY;
 
-    d = sphere(p - vec3(0,0,-1.5), 0.75  );
+    d = sphere(p - vec3(0,-0.5,-1.5), 0.75  );
 
     // floor plane
 
@@ -67,7 +76,7 @@ From a ray origin and direction, it checks if that ray intersects with a geometr
 ro: ray origin -> vec3
 rd: ray direction -> vec3
 */
-bool raymarching(in vec3 ro, in vec3 rd, out vec3 p){
+bool raymarching(vec3 ro, vec3 rd, out vec3 p){
 
     // total distance traveled by ray
     float dt = 0;
@@ -102,7 +111,7 @@ Computes the normal of a point using forward and central differences
 See this article for more details about this technique:
 p: point -> vec3
 */
-vec3 getNormal(in vec3 p){
+vec3 getNormal(vec3 p){
 
     vec3 normal = vec3(map(p+NORMAL_OFFSET.xyy) - map(p-NORMAL_OFFSET.xyy),
                   map(p+NORMAL_OFFSET.yxy) - map(p-NORMAL_OFFSET.yxy),
@@ -116,7 +125,7 @@ vec3 getNormal(in vec3 p){
 Computes the direction from the light to the point p
 p: point -> vec3
 */
-vec3 getLightDirection(in vec3 p){
+vec3 getLightDirection(vec3 p){
 
     vec3 direction = lightPosition-p;
     direction = normalize(direction);
@@ -127,7 +136,7 @@ vec3 getLightDirection(in vec3 p){
 /*
 Compute the shading intensity of the point from the normal and the light direction
 */
-float shading(in vec3 p, in vec3 normal, in vec3 lightDirection, vec3 color){
+float shading(vec3 p, vec3 normal, vec3 lightDirection, vec3 color){
 
     // finding the angle between the normal and the light direction
     // bringing back between
@@ -143,22 +152,22 @@ float shading(in vec3 p, in vec3 normal, in vec3 lightDirection, vec3 color){
 }
 
 /*
-Computes soft shadows
+Computes soft shadows with the point and the light direction
 
 */
-float softShadow(in vec3 ro, in vec3 rd, float minDist, float maxDist, float k){
+float softShadow(in vec3 lightOrigin, in vec3 lightDirection){
 
     // penumbra of the shadow
     float penumbra = 1.0;
 
     // stating travel point
-    float t = minDist;
+    float t = MIN_SHADOW;
 
     // marching until we reach the max shadow's distance
-    for(int i = 0; t < maxDist; i++){
+    for(int i = 0; t < MAX_DISTANCE; i++){
 
         // current marching point
-        vec3 p = ro + rd * t;
+        vec3 p = lightOrigin + lightDirection * t;
 
         // current distance
         float d = map(p);
@@ -169,12 +178,38 @@ float softShadow(in vec3 ro, in vec3 rd, float minDist, float maxDist, float k){
         }
 
         // computing the penumbra
-        penumbra = min(penumbra, k*d/t);
+        penumbra = min(penumbra, PENUMBRA_FACTOR*d/t);
 
+        // adding the distance
         t += d;
     }
 
     return penumbra * 0.5 + 0.5;
+}
+
+float ambientOcclusion(in vec3 p, in vec3 n){
+
+    float occlusion = 0;
+
+    float stepSize = AO_STEP_SIZE;
+
+    for(int i = 0; i < AO_STEPS; i++){
+        // current marching point
+        vec3 rp = p + n * stepSize;
+
+        // distance from point
+        float d = map(rp);
+
+        // summing the occlusion
+        occlusion += stepSize - d;
+
+        stepSize += AO_STEP_SIZE;
+
+    }
+
+    occlusion *= AO_INTENSITY;
+
+    return 1 - clamp(occlusion, 0, 1);
 }
 
 /*
@@ -208,7 +243,9 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
 
         color = shading(p, normal, lightDirection, color) * color;
 
-        color = softShadow(p, lightDirection, MIN_SHADOW, MAX_SHADOW, PENUMBRA_FACTOR) * color;
+//        color = softShadow(p, lightDirection) * color;
+
+        color = ambientOcclusion(p, normal) * color;
 
 
     }
