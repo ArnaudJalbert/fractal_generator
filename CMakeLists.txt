@@ -19,6 +19,6 @@ find_package(glfw3 REQUIRED)
 # glm include
 find_package(glm REQUIRED)
 
-add_executable(${PROJECT_NAME} main.cpp) #The name of the cpp file and its path can vary
+add_executable(${PROJECT_NAME} main.cpp)
 
 target_link_libraries(${PROJECT_NAME} OpenGL::GL GLEW::glew glfw)

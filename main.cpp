@@ -1,10 +1,6 @@
-//
-// Created by Arnaud Jalbert on 2023-03-12.
-//
-
-// https://learnopengl.com/Getting-started/Hello-Triangle
 
 #include "init.h"
+#include "camera.h"
 
 using namespace std;
 
@@ -104,6 +100,31 @@ unsigned int linkShaders(unsigned int vertexShader, unsigned int fragmentShader)
     return shaderProgram;
 }
 
+void sendDataToShader(unsigned int shaderProgram){
+    // addresses of all the uniforms variables of the shader program
+    // we assign the camera information as well as the resolution and
+    GLint resolutionLocation = glGetUniformLocation(shaderProgram, "resolution");
+    glUniform2i(resolutionLocation, WIDTH, HEIGHT);
+
+    GLint aspectRatioLocation = glGetUniformLocation(shaderProgram, "aspectRatio");
+    glUniform1f(aspectRatioLocation, float(WIDTH)/float(HEIGHT));
+
+    GLint cameraUpLocation = glGetUniformLocation(shaderProgram, "cameraUp");
+    glUniform3fv(cameraUpLocation, 1, value_ptr(cameraUp));
+
+    GLint cameraRightLocation = glGetUniformLocation(shaderProgram, "cameraRight");
+    glUniform3fv(cameraRightLocation, 1, value_ptr(cameraRight));
+
+    GLint cameraLookatLocation = glGetUniformLocation(shaderProgram, "cameraLookat");
+    glUniform3fv(cameraLookatLocation, 1, value_ptr(cameraLookat));
+
+    GLint cameraOriginLocation = glGetUniformLocation(shaderProgram, "cameraOrigin");
+    glUniform3fv(cameraOriginLocation, 1, value_ptr(cameraOrigin));
+
+    GLint fovLocation = glGetUniformLocation(shaderProgram, "fov");
+    glUniform1f(fovLocation, fov);
+}
+
 int main(){
 
     glfwInit();
@@ -148,7 +169,7 @@ int main(){
     unsigned int shaderProgram = linkShaders(vertexShader, fragmentShader);
     glUseProgram(shaderProgram);
 
-    // basic rectangle th
+    // basic rectangle that covers the 4 corners of the screen
     float vertices[] = {
             1,  1, -1,  // top right
             1,  -1, -1,  // bottom right
@@ -160,18 +181,23 @@ int main(){
             1, 2, 3    // second triangle
     };
 
-    // create VAO and VBO
+    /*
+     * IMPORTANT: I acknowledge that most of this setup is taken from LearnOpenGL.com,
+     * I thought it was well made and did it in the training so I kept most of it
+     */
+
+    // create VAO, VBO and EBO
     unsigned int VAO, VBO, EBO;
 
-    // creating the vertex array
+    // creating the vertex array VAO
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
     glGenBuffers(1, &EBO);
 
-    // binding arrays
+    // binding VAO
     glBindVertexArray(VAO);
 
-    // creating the vertex buffers
+    // creating the vertex buffers VBO
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
@@ -183,18 +209,7 @@ int main(){
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-    // addresses of all the uniforms of the shader program
-    GLint resolutionLocation = glGetUniformLocation(shaderProgram, "u_resolution");
-    GLint cameraUpLocation = glGetUniformLocation(shaderProgram, "u_cameraUp");
-    GLint cameraRightLocation = glGetUniformLocation(shaderProgram, "u_cameraRight");
-    GLint cameraForwardLocation = glGetUniformLocation(shaderProgram, "u_cameraForward");
-    GLint cameraPositionLocation = glGetUniformLocation(shaderProgram, "u_cameraPosition");
-    GLint focalLengthLocation = glGetUniformLocation(shaderProgram, "u_focalLength");
-    GLint aspectRatioLocation = glGetUniformLocation(shaderProgram, "u_aspectRatio");
-
-    // sending resolution to the shader
-    glUniform2i(resolutionLocation, float(WIDTH), float(HEIGHT));
-    glUniform1f(aspectRatioLocation, float(WIDTH)/float(HEIGHT));
+    sendDataToShader(shaderProgram);
 
     // window loop
     while(!glfwWindowShouldClose(window))
@@ -206,14 +221,16 @@ int main(){
         // commands
         // --------
 
+        // activate shader
         glUseProgram(shaderProgram);
 
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        // clear background
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        // sending vertices to the shader
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------

@@ -1,6 +1,3 @@
-//
-// Created by Arnaud Jalbert on 2023-03-12.
-//
 
 #ifndef FRACTAL_GENERATOR_INIT_H
 #define FRACTAL_GENERATOR_INIT_H
@@ -12,6 +9,8 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 using namespace std;
 using namespace glm;
