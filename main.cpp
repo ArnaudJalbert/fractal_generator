@@ -1,6 +1,7 @@
 
 #include "init.h"
 #include "camera.h"
+#include "light.h"
 
 using namespace std;
 
@@ -123,6 +124,12 @@ void sendDataToShader(unsigned int shaderProgram){
 
     GLint fovLocation = glGetUniformLocation(shaderProgram, "fov");
     glUniform1f(fovLocation, fov);
+
+    GLint lightPositionLocation = glGetUniformLocation(shaderProgram, "lightPosition");
+    glUniform3fv(lightPositionLocation, 1, value_ptr(lightPosition));
+
+    GLint lightIntensityLocation = glGetUniformLocation(shaderProgram, "lightIntensity");
+    glUniform1f(lightIntensityLocation, lightIntensity);
 }
 
 int main(){
