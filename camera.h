@@ -22,7 +22,7 @@ vec3 cameraUp = vec3(0,1,0);
 vec3 cameraRight = vec3(1,0,0);
 
 // field of view -> degrees
-float fov = 1.0f;
+float fov = 1.5f;
 
 mat4 view = lookAt(cameraOrigin,
                    cameraLookat,

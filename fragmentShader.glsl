@@ -1,11 +1,12 @@
 #version 330 core
 
 // raymarch settings
-#define MAX_RAYMARCH_STEPS 2048
-#define EPSILON 0.000001f
+#define MAX_RAYMARCH_STEPS 1024
+#define EPSILON 0.001f
 #define MAX_DISTANCE 150
 // utils
 #define INFINITY 999999999
+#define PI 3.14159265358979
 // normals
 #define NORMAL_OFFSET vec2(EPSILON, 0)
 // geometry
@@ -18,9 +19,13 @@
 #define AO_STEPS 10
 #define AO_STEP_SIZE 0.01f
 #define AO_INTENSITY 1.0f
+// mandelbulb
+#define MB_REPETITIONS 3
+#define MB_ITERATIONS 10
+
 
 smooth in vec3 fragPosition; // position of the fragment
-out vec4 outColor;
+out vec4 outColor; // outputted color
 
 uniform vec2 resolution;
 uniform float aspectRatio;
@@ -31,6 +36,43 @@ uniform vec3 cameraRight;
 uniform float fov;
 uniform vec3 lightPosition;
 uniform float lightIntensity;
+
+/*
+SDF of the mandelbulb fractals
+Computes the distance from a point to the closest
+*/
+float mandelbulb (vec3 position) {
+    vec3 z = position;
+    float dr = 1.0;
+    float r = 0.0;
+    int iterations = 0;
+    float power = 15;
+
+    for (int i = 0; i < 10; i++) {
+        iterations = i;
+        r = length (z);
+
+        if (r > 2.0) {
+            break;
+        }
+
+        // convert to polar coordinates
+        float theta = acos (z.z / r);
+        float phi = atan (z.y, z.x);
+        dr = pow (r, power - 1.0) * power * dr + 1.0;
+
+        // scale and rotate the point
+        float zr = pow (r, power);
+        theta = theta * power;
+        phi = phi * power;
+
+        // convert back to cartesian coordinates
+        z = zr * vec3 (sin (theta) * cos (phi), sin (phi) * sin (theta), cos (theta));
+        z += position;
+    }
+    float dst = 0.5 * log (r) * r / dr;
+    return dst;
+}
 
 /*
 Computes the distance from a point to a sphere
@@ -51,18 +93,32 @@ float floorPlane( vec3 p, vec3 n)
     return dot(p,n) + 0.75;
 }
 
+// Mod Position Axis
+float modAxis (inout float p, float size)
+{
+    float halfsize = size * 0.5;
+    float c = floor((p+halfsize)/size);
+    p = mod(p+halfsize,size)-halfsize;
+    p = mod(-p+halfsize,size)-halfsize;
+    return c;
+}
+
 /*
 Returns the closest distance from a point
 p: point -> vec3
 */
 float map(vec3 p){
 
+//    modAxis(p.x, 15);
+//    modAxis(p.y, 15);
+
     // current smallest distance
     float d = INFINITY;
 
-    d = sphere(p - vec3(0,-0.5,-1.5), 0.75  );
+    d = sphere(p - vec3(0,0,-1.5), 0.75 );
+//    d = mandelbulb(p - vec3(0,0, -2));
 
-    // floor plane
+//     floor plane
 
     float floorPlane = floorPlane(p,FLOOR_PLANE_NORMAL);
 
@@ -243,7 +299,7 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
 
         color = shading(p, normal, lightDirection, color) * color;
 
-//        color = softShadow(p, lightDirection) * color;
+        color = softShadow(p, lightDirection) * color;
 
         color = ambientOcclusion(p, normal) * color;
 

@@ -239,8 +239,8 @@ int main(){
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-        cameraOrigin = vec3(cameraOrigin.x, cameraOrigin.y, cameraOrigin.z+0.001);
-        sendDataToShader(shaderProgram);
+//        cameraOrigin = vec3(cameraOrigin.x, cameraOrigin.y, cameraOrigin.z+0.1);
+//        sendDataToShader(shaderProgram);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
