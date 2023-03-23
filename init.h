@@ -18,8 +18,8 @@ using namespace glm;
 #define MAJOR_VERSION 3
 #define MINOR_VERSION 3
 
-#define WIDTH 800
-#define HEIGHT 800
+#define WIDTH 1920
+#define HEIGHT 1280
 
 // check shader success/failure
 int success;

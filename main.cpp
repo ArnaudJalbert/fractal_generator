@@ -1,6 +1,8 @@
 
 #include "init.h"
 #include "camera.h"
+#include "light.h"
+#include "mandelbulb.h"
 
 using namespace std;
 
@@ -123,6 +125,15 @@ void sendDataToShader(unsigned int shaderProgram){
 
     GLint fovLocation = glGetUniformLocation(shaderProgram, "fov");
     glUniform1f(fovLocation, fov);
+
+    GLint lightPositionLocation = glGetUniformLocation(shaderProgram, "lightPosition");
+    glUniform3fv(lightPositionLocation, 1, value_ptr(lightPosition));
+
+    GLint lightIntensityLocation = glGetUniformLocation(shaderProgram, "lightIntensity");
+    glUniform1f(lightIntensityLocation, lightIntensity);
+
+    GLint mbIterationsLocation = glGetUniformLocation(shaderProgram, "mbIterations");
+    glUniform1f(mbIterationsLocation, mbIterations);
 }
 
 int main(){
@@ -231,6 +242,10 @@ int main(){
         // sending vertices to the shader
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+//        cameraOrigin = vec3(cameraOrigin.x, cameraOrigin.y, cameraOrigin.z+0.1);
+        mbIterations += 0.01;
+        sendDataToShader(shaderProgram);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
