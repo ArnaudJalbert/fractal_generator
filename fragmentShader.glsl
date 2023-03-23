@@ -20,8 +20,9 @@
 #define AO_STEP_SIZE 0.01f
 #define AO_INTENSITY 1.0f
 // mandelbulb
-#define MB_REPETITIONS 3
-#define MB_ITERATIONS 10
+#define MB_REPETITIONS 10
+#define MB_ITERATIONS 31
+#define MB_BAILOUT 2.0
 
 
 smooth in vec3 fragPosition; // position of the fragment
@@ -37,40 +38,51 @@ uniform float fov;
 uniform vec3 lightPosition;
 uniform float lightIntensity;
 
+uniform float mbIterations;
+
+
 /*
 SDF of the mandelbulb fractals
 Computes the distance from a point to the closest
 */
 float mandelbulb (vec3 position) {
-    vec3 z = position;
+
+    // zeta variable to be computed
+    vec3 zeta = position;
+    //derivative of the mandelbulb
     float dr = 1.0;
+    // current distance from the origin
     float r = 0.0;
-    int iterations = 0;
-    float power = 15;
 
-    for (int i = 0; i < 10; i++) {
-        iterations = i;
-        r = length (z);
-
-        if (r > 2.0) {
-            break;
-        }
+    for (int i = 0; i < MB_REPETITIONS; i++) {
 
         // convert to polar coordinates
-        float theta = acos (z.z / r);
-        float phi = atan (z.y, z.x);
-        dr = pow (r, power - 1.0) * power * dr + 1.0;
+        r = length (zeta);
+        if (r > MB_BAILOUT) break; // check if the distance from the fractal is too far
+        float phi = acos (zeta.z / r);
+        float theta = atan (zeta.y, zeta.x);
+        dr = pow (r, mbIterations - 1.0) * mbIterations * dr + 1.0;
 
         // scale and rotate the point
-        float zr = pow (r, power);
-        theta = theta * power;
-        phi = phi * power;
+        float zr = pow (r, mbIterations);
+        phi = phi * mbIterations;
+        theta = theta * mbIterations;
 
-        // convert back to cartesian coordinates
-        z = zr * vec3 (sin (theta) * cos (phi), sin (phi) * sin (theta), cos (theta));
-        z += position;
+        // converting back to euclidean coordinatees
+        float x = sin (phi) * cos(theta);
+        float y = sin(theta) * sin(phi);
+        float z = cos(phi);
+
+        // scale with r
+        zeta = zr * vec3 (x,y,z);
+        // march over the position
+        zeta += position;
     }
+
+    // estimating the distance with Douady-Hubbard Potential(
     float dst = 0.5 * log (r) * r / dr;
+
+    // current distance from ray
     return dst;
 }
 
@@ -103,26 +115,85 @@ float modAxis (inout float p, float size)
     return c;
 }
 
+// Rotation matrix around the x axis
+// inverting it natively
+mat3 rotateX(float theta) {
+    // cosine value
+    float c = cos(theta);
+    // sin value
+    float s = sin(theta);
+    // see transformation matrices
+    return mat3(
+    vec3(1, 0, 0),
+    vec3(0, c, -s),
+    vec3(0, s, c)
+    );
+}
+
+// Rotation matrix around the y axis
+// inverting it natively
+mat3 rotateY(float theta) {
+    // cosine value
+    float c = cos(theta);
+    // sin value
+    float s = sin(theta);
+    // see transformation matrices
+    return mat3(
+    vec3(c, 0, s),
+    vec3(0, 1, 0),
+    vec3(-s, 0, c)
+    );
+}
+
+// Rotation matrix around the z axis
+// inverting it natively
+mat3 rotateZ(float theta) {
+    // cosine value
+    float c = cos(theta);
+    // sin value
+    float s = sin(theta);
+    // see transformation matrices
+    return mat3(
+    vec3(c, -s, 0),
+    vec3(s, c, 0),
+    vec3(0, 0, 1)
+    );
+}
+
 /*
 Returns the closest distance from a point
 p: point -> vec3
 */
 float map(vec3 p){
 
-//    modAxis(p.x, 15);
-//    modAxis(p.y, 15);
+    // we first make all the transofrmation we wish to do
+    // rotations, translations, scaling, mod repeat...
+
+//    modAxis(p.x, 2);
+//    modAxis(p.y, 2);
+
+    float offset = mbIterations * 0.25;
+    mat3 rotateZ = rotateZ(offset);
+
+    p = p * rotateZ;
+
+    mat3 rotateY = rotateY(offset);
+
+    p = p* rotateY;
+
+
 
     // current smallest distance
     float d = INFINITY;
 
-    d = sphere(p - vec3(0,0,-1.5), 0.75 );
-//    d = mandelbulb(p - vec3(0,0, -2));
+//    d = sphere(p - vec3(0,0,-1.5), 0.75 );
+    d = mandelbulb(p - vec3(0,0, 0));
 
-//     floor plane
+    // floor plane
 
-    float floorPlane = floorPlane(p,FLOOR_PLANE_NORMAL);
-
-    d = min(d, floorPlane);
+//    float floorPlane = floorPlane(p,FLOOR_PLANE_NORMAL);
+//
+//    d = min(d, floorPlane);
 
     return d;
 }
