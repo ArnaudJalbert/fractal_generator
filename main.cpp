@@ -236,14 +236,14 @@ int main(){
         glUseProgram(shaderProgram);
 
         // clear background
-        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // sending vertices to the shader
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-//        cameraOrigin = vec3(cameraOrigin.x, cameraOrigin.y, cameraOrigin.z+0.1);
+//        cameraOrigin = vec3(cameraOrigin.x, cameraOrigin.y, cameraOrigin.z+0.01);
         mbIterations += 0.01;
         sendDataToShader(shaderProgram);
 

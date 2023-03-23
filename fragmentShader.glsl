@@ -1,8 +1,8 @@
 #version 330 core
 
 // raymarch settings
-#define MAX_RAYMARCH_STEPS 1024
-#define EPSILON 0.001f
+#define MAX_RAYMARCH_STEPS 2048
+#define EPSILON 0.00001f
 #define MAX_DISTANCE 150
 // utils
 #define INFINITY 999999999
@@ -12,8 +12,8 @@
 // geometry
 #define FLOOR_PLANE_NORMAL vec3(0,1,0)
 // shadows
-#define MIN_SHADOW 1
-#define MAX_SHADOW 5
+#define MIN_SHADOW 5
+#define MAX_SHADOW 10
 #define PENUMBRA_FACTOR 8
 // ambient occlusion
 #define AO_STEPS 10
@@ -23,6 +23,11 @@
 #define MB_REPETITIONS 10
 #define MB_ITERATIONS 31
 #define MB_BAILOUT 2.0
+// menger sponge
+#define MS_REPETITIONS 4
+#define MS_SCALE vec3(1)
+#define MS_RADIUS 0.1
+#define MS_ITERATIONS 3.7f
 
 
 smooth in vec3 fragPosition; // position of the fragment
@@ -39,71 +44,6 @@ uniform vec3 lightPosition;
 uniform float lightIntensity;
 
 uniform float mbIterations;
-
-
-/*
-SDF of the mandelbulb fractals
-Computes the distance from a point to the closest
-*/
-float mandelbulb (vec3 position) {
-
-    // zeta variable to be computed
-    vec3 zeta = position;
-    //derivative of the mandelbulb
-    float dr = 1.0;
-    // current distance from the origin
-    float r = 0.0;
-
-    for (int i = 0; i < MB_REPETITIONS; i++) {
-
-        // convert to polar coordinates
-        r = length (zeta);
-        if (r > MB_BAILOUT) break; // check if the distance from the fractal is too far
-        float phi = acos (zeta.z / r);
-        float theta = atan (zeta.y, zeta.x);
-        dr = pow (r, mbIterations - 1.0) * mbIterations * dr + 1.0;
-
-        // scale and rotate the point
-        float zr = pow (r, mbIterations);
-        phi = phi * mbIterations;
-        theta = theta * mbIterations;
-
-        // converting back to euclidean coordinatees
-        float x = sin (phi) * cos(theta);
-        float y = sin(theta) * sin(phi);
-        float z = cos(phi);
-
-        // scale with r
-        zeta = zr * vec3 (x,y,z);
-        // march over the position
-        zeta += position;
-    }
-
-    // estimating the distance with Douady-Hubbard Potential(
-    float dst = 0.5 * log (r) * r / dr;
-
-    // current distance from ray
-    return dst;
-}
-
-/*
-Computes the distance from a point to a sphere
-p: point of the ray -> vec3
-r: radius of the sphere -> float
-*/
-float sphere(vec3 p, float r){
-    return length(p)-r;
-}
-
-/*
-Computes the distance from a point to a plane
-p: point of the ray -> vec3
-n: normal of the plane(normalized) -> vec3
-*/
-float floorPlane( vec3 p, vec3 n)
-{
-    return dot(p,n) + 0.75;
-}
 
 // Mod Position Axis
 float modAxis (inout float p, float size)
@@ -160,6 +100,110 @@ mat3 rotateZ(float theta) {
     );
 }
 
+float maxcomp(in vec3 p ) { return max(p.x,max(p.y,p.z));}
+
+/*
+SDF of round box used for menger sponge
+*/
+float roundbox( vec3 p, vec3 b, float r )
+{
+    vec3 q = abs(p) - b;
+    return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - r;
+}
+
+float mengerSponge(vec3 p){
+
+    // distance from base box
+    float d = roundbox(p, MS_SCALE, MS_RADIUS);
+    float s = mod(mbIterations * 0.05, 1);
+
+    for(int i = 0; i < MS_REPETITIONS; i++){
+
+        // transformation of the fractal
+        p = p * rotateX(mbIterations*0.1);
+        p = p * rotateY(mbIterations*0.1);
+        p = p * rotateZ(mbIterations*0.1);
+
+        vec3 a = mod( p*s, 2.0 )-1.0;
+
+        //
+        s *= MS_ITERATIONS;
+        vec3 r = abs(1.0 - 3.0*abs(a));
+        float da = max(r.x,r.y);
+        float db = max(r.y,r.z);
+        float dc = max(r.z,r.x);
+        float c = (min(da,min(db,dc))-1.0)/s;
+
+        d = max(d,c);
+    }
+
+    return d;
+}
+
+/*
+SDF of the mandelbulb fractals
+Computes the distance from a point to the closest
+*/
+float mandelbulb (vec3 p) {
+
+    // zeta variable to be computed
+    vec3 zeta = p;
+    //derivative of the mandelbulb
+    float dr = 1.0;
+    // current distance from the origin
+    float r = 0.0;
+
+    for (int i = 0; i < MB_REPETITIONS; i++) {
+
+        // convert to polar coordinates
+        r = length (zeta);
+        if (r > MB_BAILOUT) break; // check if the distance from the fractal is too far
+        float phi = acos (zeta.z / r);
+        float theta = atan (zeta.y, zeta.x);
+        dr = pow (r, mbIterations - 1.0) * mbIterations * dr + 1.0;
+
+        // scale and rotate the point
+        float zr = pow (r, mbIterations);
+        phi = phi * mbIterations;
+        theta = theta * mbIterations;
+
+        // converting back to euclidean coordinatees
+        float x = sin (phi) * cos(theta);
+        float y = sin(theta) * sin(phi);
+        float z = cos(phi);
+
+        // scale with r
+        zeta = zr * vec3 (x,y,z);
+        // march over the position
+        zeta += p;
+    }
+
+    // estimating the distance with Douady-Hubbard Potential(
+    float dst = 0.5 * log (r) * r / dr;
+
+    // current distance from ray
+    return dst;
+}
+
+/*
+Computes the distance from a point to a sphere
+p: point of the ray -> vec3
+r: radius of the sphere -> float
+*/
+float sphere(vec3 p, float r){
+    return length(p)-r;
+}
+
+/*
+Computes the distance from a point to a plane
+p: point of the ray -> vec3
+n: normal of the plane(normalized) -> vec3
+*/
+float floorPlane( vec3 p, vec3 n)
+{
+    return dot(p,n) + 0.75;
+}
+
 /*
 Returns the closest distance from a point
 p: point -> vec3
@@ -169,8 +213,9 @@ float map(vec3 p){
     // we first make all the transofrmation we wish to do
     // rotations, translations, scaling, mod repeat...
 
-//    modAxis(p.x, 2);
-//    modAxis(p.y, 2);
+//    modAxis(p.x, 5);
+//    modAxis(p.y, 5);
+//    modAxis(p.z, 5);
 
     float offset = mbIterations * 0.25;
     mat3 rotateZ = rotateZ(offset);
@@ -187,7 +232,9 @@ float map(vec3 p){
     float d = INFINITY;
 
 //    d = sphere(p - vec3(0,0,-1.5), 0.75 );
-    d = mandelbulb(p - vec3(0,0, 0));
+//    d = mandelbulb(p - vec3(0,0, 0));
+
+    d = mengerSponge(p);
 
     // floor plane
 
@@ -203,7 +250,7 @@ From a ray origin and direction, it checks if that ray intersects with a geometr
 ro: ray origin -> vec3
 rd: ray direction -> vec3
 */
-bool raymarching(vec3 ro, vec3 rd, out vec3 p){
+bool raymarching(vec3 ro, vec3 rd, out vec3 p, out float d){
 
     // total distance traveled by ray
     float dt = 0;
@@ -219,7 +266,7 @@ bool raymarching(vec3 ro, vec3 rd, out vec3 p){
         p = ro + rd * dt;
 
         // compute the closest point to the current raymarching position
-        float d = map(p);
+        d = map(p);
 
         if(d < EPSILON){
             return true;
@@ -354,8 +401,10 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
 
     vec3 p; // point of intersection
 
+    float d; // distance from ray origin
+
     // check if there is an interesection woth geometry
-    bool intersection = raymarching(ro, rd, p);
+    bool intersection = raymarching(ro, rd, p, d);
 
     // check if there is an intersection
     if(intersection){
@@ -378,7 +427,7 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
     }
     else{
         // TODO define default BG color
-        color = vec3(1,1,1);
+        color = vec3(0.1,0.1,0.1);
     }
 
     return color;
