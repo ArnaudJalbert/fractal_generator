@@ -1,8 +1,8 @@
 #version 330 core
 
 // raymarch settings
-#define MAX_RAYMARCH_STEPS 2048
-#define EPSILON 0.00001f
+#define MAX_RAYMARCH_STEPS 1000
+#define EPSILON 0.001
 #define MAX_DISTANCE 150
 // utils
 #define INFINITY 999999999
@@ -13,8 +13,8 @@
 #define FLOOR_PLANE_NORMAL vec3(0,1,0)
 // shadows
 #define MIN_SHADOW 5
-#define MAX_SHADOW 10
-#define PENUMBRA_FACTOR 8
+#define MAX_SHADOW 50
+#define PENUMBRA_FACTOR 74
 // ambient occlusion
 #define AO_STEPS 10
 #define AO_STEP_SIZE 0.01f
@@ -28,6 +28,10 @@
 #define MS_SCALE vec3(1)
 #define MS_RADIUS 0.1
 #define MS_ITERATIONS 3.7f
+// julia
+#define JUL_REPETITIONS 7
+#define M 0.7
+//#define JUL_C vec4(sin(0.96456)*M,cos(0.59237)*M,sin(0.73426)*M,cos(0.42379)*M)
 
 
 smooth in vec3 fragPosition; // position of the fragment
@@ -44,6 +48,8 @@ uniform vec3 lightPosition;
 uniform float lightIntensity;
 
 uniform float mbIterations;
+
+vec4 JUL_C = 0.45*cos(vec4(2,0.5,2,1));
 
 // Mod Position Axis
 float modAxis (inout float p, float size)
@@ -102,6 +108,33 @@ mat3 rotateZ(float theta) {
 
 float maxcomp(in vec3 p ) { return max(p.x,max(p.y,p.z));}
 
+// computations for quaternions
+
+// to square a quaternion
+vec4 quaternionSquare(vec4 a)
+{
+    return vec4(a.x*a.x - a.y*a.y - a.z*a.z - a.w*a.w,
+                2.0 * a.x * a.y,
+                2.0 * a.x * a.z,
+                2.0 * a.x * a.w );
+}
+
+// multiply two quaternions
+vec4 quaternionMultiply(vec4 a, vec4 b)
+{
+    return vec4(a.x * b.x - a.y * b.y - a.z * b.z - a.w * b.w,
+                a.y * b.x + a.x * b.y + a.z * b.w - a.w * b.z,
+                a.z * b.x + a.x * b.z + a.w * b.y - a.y * b.w,
+                a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y );
+
+}
+
+// length of quaternion
+float quaternionLength(vec4 q)
+{
+    return dot(q,q);
+}
+
 /*
 SDF of round box used for menger sponge
 */
@@ -111,11 +144,55 @@ float roundbox( vec3 p, vec3 b, float r )
     return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - r;
 }
 
+// julia based on iq's implementation
+float julia(vec3 p)
+{
+
+    // c parameter
+    vec4 c = 0.5*vec4(cos(mbIterations),cos(mbIterations*1.1),cos(mbIterations*2.3),cos(mbIterations*3.1));
+
+    // zeta variable
+    vec4 zeta = vec4( p, 0.0 );
+    // new zeta
+    vec4 newZeta;
+
+    // scale factor
+    float md2 = 1.0;
+    // scale step
+    float mz2 = dot(zeta, zeta);
+
+    for(int i=0;i<JUL_REPETITIONS;i++)
+    {
+        // scaling
+        md2 *= 4.0 * mz2;
+
+        // compute x zeta -> rotate around the x axis
+        newZeta.x = zeta.x * zeta.x - dot(zeta.yzw, zeta.yzw);
+
+        // compute yz zeta
+        newZeta.yzw = 2.0 * zeta.x * zeta.yzw;
+
+        // new zeta
+        zeta = newZeta + c;
+
+        // new scale step
+        mz2 = dot(zeta,zeta);
+
+        if(mz2>4.0)
+        {
+            break;
+        }
+    }
+
+    return 0.25*sqrt(mz2/md2)*log(mz2);
+}
+
+
 float mengerSponge(vec3 p){
 
     // distance from base box
-    float d = roundbox(p, MS_SCALE, MS_RADIUS);
-    float s = mod(mbIterations * 0.05, 1);
+    float d = roundbox(p, MS_SCALE, MS_RADIUS+2);
+    float s = sin(mbIterations * 2);
 
     for(int i = 0; i < MS_REPETITIONS; i++){
 
@@ -173,7 +250,7 @@ float mandelbulb (vec3 p) {
         float z = cos(phi);
 
         // scale with r
-        zeta = zr * vec3 (x,y,z);
+        zeta = zr * vec3 (x,y,z) * rotateY(mbIterations) * rotateZ(mbIterations * 0.5);
         // march over the position
         zeta += p;
     }
@@ -231,8 +308,11 @@ float map(vec3 p){
     // current smallest distance
     float d = INFINITY;
 
-//    d = sphere(p - vec3(0,0,-1.5), 0.75 );
-//    d = mandelbulb(p - vec3(0,0, 0));
+//    d = sphere(p, 0.75 );
+//
+//    d = mandelbulb(p);
+//
+//    d = julia(p);
 
     d = mengerSponge(p);
 
@@ -288,11 +368,37 @@ p: point -> vec3
 vec3 getNormal(vec3 p){
 
     vec3 normal = vec3(map(p+NORMAL_OFFSET.xyy) - map(p-NORMAL_OFFSET.xyy),
-                  map(p+NORMAL_OFFSET.yxy) - map(p-NORMAL_OFFSET.yxy),
-                  map(p+NORMAL_OFFSET.yyx) - map(p-NORMAL_OFFSET.yyx)
+                      map(p+NORMAL_OFFSET.yxy) - map(p-NORMAL_OFFSET.yxy),
+                      map(p+NORMAL_OFFSET.yyx) - map(p-NORMAL_OFFSET.yyx)
                   );
 
     return normalize(normal);
+}
+
+vec3 juliaNormal(vec3 p, vec3 ray){
+
+    vec4 za = vec4(p+NORMAL_OFFSET.xyy,0.0);
+    vec4 zb = vec4(p-NORMAL_OFFSET.xyy,0.0);
+    vec4 zc = vec4(p+NORMAL_OFFSET.yxy,0.0);
+    vec4 zd = vec4(p-NORMAL_OFFSET.yxy,0.0);
+    vec4 ze = vec4(p+NORMAL_OFFSET.yyx,0.0);
+    vec4 zf = vec4(p-NORMAL_OFFSET.yyx,0.0);
+
+    for(int i=0; i<JUL_REPETITIONS; i++)
+    {
+        za = quaternionSquare(za) + JUL_C;
+        zb = quaternionSquare(zb) + JUL_C;
+        zc = quaternionSquare(zc) + JUL_C;
+        zd = quaternionSquare(zd) + JUL_C;
+        ze = quaternionSquare(ze) + JUL_C;
+        zf = quaternionSquare(zf) + JUL_C;
+    }
+
+    return normalize( vec3(log2(quaternionLength(za))-log2(quaternionLength(zb)),
+                            log2(quaternionLength(zc))-log2(quaternionLength(zd)),
+                            log2(quaternionLength(ze))-log2(quaternionLength(zf))) );
+
+
 }
 
 /*
@@ -413,6 +519,8 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
 
         // computing the normal of the point
         vec3 normal = getNormal(p);
+
+//        vec3 normal = juliaNormal(p, normalize(rd-ro));
 
         // direction of the light
         vec3 lightDirection = getLightDirection(p);

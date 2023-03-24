@@ -10,7 +10,7 @@
  */
 
 // origin of the camera -> Point
-vec3 cameraOrigin = vec3(0, 0, 2);
+vec3 cameraOrigin = vec3(0, 0, 6);
 
 // lookat direction of the camera -> vector
 vec3 cameraLookat = normalize(vec3(0,0,-1));
