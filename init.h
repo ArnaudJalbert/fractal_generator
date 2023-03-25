@@ -24,4 +24,10 @@ using namespace glm;
 // check shader success/failure
 int success;
 
+// fractal mode
+int mode = 1;
+
+// to animate
+float animate = 1;
+
 #endif //FRACTAL_GENERATOR_INIT_H

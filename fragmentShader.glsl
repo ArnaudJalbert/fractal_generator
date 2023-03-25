@@ -1,7 +1,7 @@
 #version 330 core
 
 // raymarch settings
-#define MAX_RAYMARCH_STEPS 1000
+#define MAX_RAYMARCH_STEPS 1024
 #define EPSILON 0.001
 #define MAX_DISTANCE 150
 // utils
@@ -12,7 +12,7 @@
 // geometry
 #define FLOOR_PLANE_NORMAL vec3(0,1,0)
 // shadows
-#define MIN_SHADOW 5
+#define MIN_SHADOW 1
 #define MAX_SHADOW 50
 #define PENUMBRA_FACTOR 74
 // ambient occlusion
@@ -21,7 +21,7 @@
 #define AO_INTENSITY 1.0f
 // mandelbulb
 #define MB_REPETITIONS 10
-#define MB_ITERATIONS 31
+#define MB_ITERATIONS 5
 #define MB_BAILOUT 2.0
 // menger sponge
 #define MS_REPETITIONS 4
@@ -31,12 +31,18 @@
 // julia
 #define JUL_REPETITIONS 7
 #define M 0.7
-//#define JUL_C vec4(sin(0.96456)*M,cos(0.59237)*M,sin(0.73426)*M,cos(0.42379)*M)
+
+// ---- MODE -----
+#define SPHERE_MODE 0
+#define MANDELBULB_MODE 1
+#define MENGER_CUBE_MODE 2
+#define MENGER_OCTAHEDRON_MODE 2
 
 
 smooth in vec3 fragPosition; // position of the fragment
 out vec4 outColor; // outputted color
 
+// camera
 uniform vec2 resolution;
 uniform float aspectRatio;
 uniform vec3 cameraOrigin;
@@ -47,9 +53,12 @@ uniform float fov;
 uniform vec3 lightPosition;
 uniform float lightIntensity;
 
-uniform float mbIterations;
+// mandelbulb
+uniform float animate;
 
-vec4 JUL_C = 0.45*cos(vec4(2,0.5,2,1));
+// mode
+uniform int mode;
+
 
 // Mod Position Axis
 float modAxis (inout float p, float size)
@@ -138,8 +147,7 @@ float quaternionLength(vec4 q)
 /*
 SDF of round box used for menger sponge
 */
-float roundbox( vec3 p, vec3 b, float r )
-{
+float roundbox( vec3 p, vec3 b, float r ){
     vec3 q = abs(p) - b;
     return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - r;
 }
@@ -149,12 +157,10 @@ float julia(vec3 p)
 {
 
     // c parameter
-    vec4 c = 0.5*vec4(cos(mbIterations),cos(mbIterations*1.1),cos(mbIterations*2.3),cos(mbIterations*3.1));
+    vec4 c = 0.5*vec4(cos(animate),cos(animate*1.1),cos(animate*2.3),cos(animate*3.1));
 
     // zeta variable
     vec4 zeta = vec4( p, 0.0 );
-    // new zeta
-    vec4 newZeta;
 
     // scale factor
     float md2 = 1.0;
@@ -166,17 +172,11 @@ float julia(vec3 p)
         // scaling
         md2 *= 4.0 * mz2;
 
-        // compute x zeta -> rotate around the x axis
-        newZeta.x = zeta.x * zeta.x - dot(zeta.yzw, zeta.yzw);
-
-        // compute yz zeta
-        newZeta.yzw = 2.0 * zeta.x * zeta.yzw;
-
         // new zeta
-        zeta = newZeta + c;
+        zeta = quaternionSquare(zeta) + c;
 
         // new scale step
-        mz2 = dot(zeta,zeta);
+        mz2 = quaternionLength(zeta);
 
         if(mz2>4.0)
         {
@@ -187,19 +187,18 @@ float julia(vec3 p)
     return 0.25*sqrt(mz2/md2)*log(mz2);
 }
 
-
 float mengerSponge(vec3 p){
 
     // distance from base box
     float d = roundbox(p, MS_SCALE, MS_RADIUS+2);
-    float s = sin(mbIterations * 2);
+    float s = sin(animate*0.5);
 
     for(int i = 0; i < MS_REPETITIONS; i++){
 
         // transformation of the fractal
-        p = p * rotateX(mbIterations*0.1);
-        p = p * rotateY(mbIterations*0.1);
-        p = p * rotateZ(mbIterations*0.1);
+        p = p * rotateX(animate*0.1);
+        p = p * rotateY(animate*0.1);
+        p = p * rotateZ(animate*0.1);
 
         vec3 a = mod( p*s, 2.0 )-1.0;
 
@@ -230,6 +229,8 @@ float mandelbulb (vec3 p) {
     // current distance from the origin
     float r = 0.0;
 
+    float mbIterations = mod(animate + MB_ITERATIONS, 20);
+
     for (int i = 0; i < MB_REPETITIONS; i++) {
 
         // convert to polar coordinates
@@ -250,7 +251,7 @@ float mandelbulb (vec3 p) {
         float z = cos(phi);
 
         // scale with r
-        zeta = zr * vec3 (x,y,z) * rotateY(mbIterations) * rotateZ(mbIterations * 0.5);
+        zeta = zr * vec3 (x,y,z) * rotateY(animate) * rotateZ(animate * 0.5);
         // march over the position
         zeta += p;
     }
@@ -294,33 +295,31 @@ float map(vec3 p){
 //    modAxis(p.y, 5);
 //    modAxis(p.z, 5);
 
-    float offset = mbIterations * 0.25;
+    float offset = animate * 0.25;
     mat3 rotateZ = rotateZ(offset);
 
     p = p * rotateZ;
 
     mat3 rotateY = rotateY(offset);
 
-    p = p* rotateY;
-
+    p = p * rotateY;
 
 
     // current smallest distance
     float d = INFINITY;
 
-//    d = sphere(p, 0.75 );
-//
-//    d = mandelbulb(p);
-//
+    if(mode == SPHERE_MODE)
+        d = sphere(p, 0.75 );
+
+    if(mode == MANDELBULB_MODE)
+        d = mandelbulb(p);
+
+    if(mode == MENGER_CUBE_MODE ||
+       mode == MENGER_OCTAHEDRON_MODE){
+        d = mengerSponge(p);
+    }
+
 //    d = julia(p);
-
-    d = mengerSponge(p);
-
-    // floor plane
-
-//    float floorPlane = floorPlane(p,FLOOR_PLANE_NORMAL);
-//
-//    d = min(d, floorPlane);
 
     return d;
 }
@@ -375,29 +374,33 @@ vec3 getNormal(vec3 p){
     return normalize(normal);
 }
 
-vec3 juliaNormal(vec3 p, vec3 ray){
+vec3 juliaNormal(vec3 p){
 
-    vec4 za = vec4(p+NORMAL_OFFSET.xyy,0.0);
-    vec4 zb = vec4(p-NORMAL_OFFSET.xyy,0.0);
-    vec4 zc = vec4(p+NORMAL_OFFSET.yxy,0.0);
-    vec4 zd = vec4(p-NORMAL_OFFSET.yxy,0.0);
-    vec4 ze = vec4(p+NORMAL_OFFSET.yyx,0.0);
-    vec4 zf = vec4(p-NORMAL_OFFSET.yyx,0.0);
+    vec4 z = vec4(p,0.0);
+
+    vec4 c = 0.5*vec4(cos(animate),cos(animate*1.1),cos(animate*2.3),cos(animate*3.1));
+
+    // identity derivative
+    mat4x4 J = mat4x4(1,0,0,0,
+    0,1,0,0,
+    0,0,1,0,
+    0,0,0,1 );
 
     for(int i=0; i<JUL_REPETITIONS; i++)
     {
-        za = quaternionSquare(za) + JUL_C;
-        zb = quaternionSquare(zb) + JUL_C;
-        zc = quaternionSquare(zc) + JUL_C;
-        zd = quaternionSquare(zd) + JUL_C;
-        ze = quaternionSquare(ze) + JUL_C;
-        zf = quaternionSquare(zf) + JUL_C;
+        // chain rule of jacobians (removed the 2 factor)
+        J = J*mat4x4(z.x, -z.y, -z.z, -z.w,
+        z.y,  z.x,  0.0,  0.0,
+        z.z,  0.0,  z.x,  0.0,
+        z.w,  0.0,  0.0,  z.x);
+
+        // z -> z2 + c
+        z = quaternionSquare(z) + c;
+
+        if(quaternionLength(z)>4.0) break;
     }
 
-    return normalize( vec3(log2(quaternionLength(za))-log2(quaternionLength(zb)),
-                            log2(quaternionLength(zc))-log2(quaternionLength(zd)),
-                            log2(quaternionLength(ze))-log2(quaternionLength(zf))) );
-
+    return normalize( (J*z).xyz );
 
 }
 
@@ -520,7 +523,7 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
         // computing the normal of the point
         vec3 normal = getNormal(p);
 
-//        vec3 normal = juliaNormal(p, normalize(rd-ro));
+//        vec3 normal = juliaNormal(p);
 
         // direction of the light
         vec3 lightDirection = getLightDirection(p);

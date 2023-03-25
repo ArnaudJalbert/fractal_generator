@@ -4,6 +4,6 @@
 
 #include "init.h"
 
-float mbIterations = 1;
+
 
 #endif //FRACTAL_GENERATOR_MANDELBULB_H
