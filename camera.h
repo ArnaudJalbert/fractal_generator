@@ -4,13 +4,15 @@
 
 #include "init.h"
 
+#define CAMERA_SPEED 0.01f
+
 
 /*
  * We setup the camera attributes in here
  */
 
 // origin of the camera -> Point
-vec3 cameraOrigin = vec3(0, 0.2, 2);
+vec3 cameraOrigin = vec3(0, 0, 2);
 
 // lookat direction of the camera -> vector
 vec3 cameraLookat = normalize(vec3(0,0,-1));
@@ -23,6 +25,13 @@ vec3 cameraRight = vec3(1,0,0);
 
 // field of view -> degrees
 float fov = 1.2;
+
+// mouse controls
+bool firstMouse = true;
+float lastX = 0.0f;
+float lastY = 0.0f;
+float camYaw = -90.0f;
+float camPitch = 0.0f;
 
 mat4 view = lookAt(cameraOrigin,
                    cameraLookat,

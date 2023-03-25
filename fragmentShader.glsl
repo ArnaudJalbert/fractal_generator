@@ -31,6 +31,8 @@
 // julia
 #define JUL_REPETITIONS 7
 #define M 0.7
+// octahedron
+#define OH_SCALE 4
 
 // ---- MODE -----
 #define SPHERE_MODE 0
@@ -115,7 +117,6 @@ mat3 rotateZ(float theta) {
     );
 }
 
-float maxcomp(in vec3 p ) { return max(p.x,max(p.y,p.z));}
 
 // computations for quaternions
 
@@ -150,6 +151,15 @@ SDF of round box used for menger sponge
 float roundbox( vec3 p, vec3 b, float r ){
     vec3 q = abs(p) - b;
     return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - r;
+}
+
+/*
+SDF of ocatahedron used for menger sponge
+*/
+float octahedron( vec3 p)
+{
+    p = abs(p);
+    return (p.x+p.y+p.z-OH_SCALE)*0.57735027;
 }
 
 // julia based on iq's implementation
@@ -189,9 +199,14 @@ float julia(vec3 p)
 
 float mengerSponge(vec3 p){
 
+    float d;
+
     // distance from base box
-    float d = roundbox(p, MS_SCALE, MS_RADIUS+2);
-    float s = sin(animate*0.5);
+    if(mode ==2 )
+        d = roundbox(p, MS_SCALE, MS_RADIUS+2);
+    if(mode == 3)
+        d = octahedron(p);
+    float s = sin(animate*0.1);
 
     for(int i = 0; i < MS_REPETITIONS; i++){
 
@@ -229,7 +244,7 @@ float mandelbulb (vec3 p) {
     // current distance from the origin
     float r = 0.0;
 
-    float mbIterations = mod(animate + MB_ITERATIONS, 20);
+    float mbIterations = mod(animate, 20) + MB_ITERATIONS;
 
     for (int i = 0; i < MB_REPETITIONS; i++) {
 
@@ -504,7 +519,7 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
     // origin of the ray
     vec3 ro = cameraOrigin;
     // direction of the ray
-    vec3 rd = normalize(cameraLookat * fov +
+    vec3 rd = normalize(cameraLookat +
                         cameraRight * fragPosition.x * aspectRatio +
                         cameraUp * fragPosition.y);
 

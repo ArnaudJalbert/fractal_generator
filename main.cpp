@@ -139,7 +139,67 @@ void sendDataToShader(unsigned int shaderProgram){
     glUniform1i(modeLocations, mode);
 }
 
-void mouseControl(){
+void wasdControl(GLFWwindow* window){
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        cameraOrigin += CAMERA_SPEED * cameraLookat;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        cameraOrigin -= CAMERA_SPEED * cameraLookat;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        cameraOrigin -= (cross(cameraLookat, cameraUp)) * CAMERA_SPEED;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        cameraOrigin += (cross(cameraLookat, cameraUp)) * CAMERA_SPEED;
+}
+
+void mouseControl(GLFWwindow* window, double xpos, double ypos){
+
+    if (firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos;
+    lastX = xpos;
+    lastY = ypos;
+
+    float sensitivity = 0.1f;
+    xoffset *= sensitivity;
+    yoffset *= sensitivity;
+
+    camYaw   += xoffset;
+    camPitch += yoffset;
+
+    if(camPitch > 89.0f)
+        camPitch = 89.0f;
+    if(camPitch < -89.0f)
+        camPitch = -89.0f;
+
+    vec3 direction;
+    direction.x = cos(radians(camYaw)) * cos(radians(camPitch));
+    direction.y = sin(radians(camPitch));
+    direction.z = sin(radians(camYaw)) * cos(radians(camPitch));
+
+    cameraLookat = normalize(direction);
+    cameraRight = glm::normalize(glm::cross(cameraLookat, cameraUp));
+    cameraUp = glm::normalize(glm::cross(cameraRight, cameraLookat));
+}
+
+void switchFractals(GLFWwindow* window){
+
+    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
+        mode = 1;
+    if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
+        mode = 2;
+        animate = 0;
+        cameraOrigin = vec3(0,0,4);
+    }
+    if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) {
+        mode = 3;
+        animate = 0;
+    }
 
 }
 
@@ -227,6 +287,10 @@ int main(){
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
+    // mouse control
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetCursorPosCallback(window, reinterpret_cast<GLFWcursorposfun>(mouseControl));
+
     sendDataToShader(shaderProgram);
 
     // window loop
@@ -250,8 +314,13 @@ int main(){
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-//        cameraOrigin = vec3(cameraOrigin.x, cameraOrigin.y, cameraOrigin.z+0.01);
+        // animate constant
         animate = glfwGetTime();
+
+        wasdControl(window);
+        switchFractals(window);
+
+        // updated data
         sendDataToShader(shaderProgram);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
