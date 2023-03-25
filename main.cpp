@@ -132,8 +132,15 @@ void sendDataToShader(unsigned int shaderProgram){
     GLint lightIntensityLocation = glGetUniformLocation(shaderProgram, "lightIntensity");
     glUniform1f(lightIntensityLocation, lightIntensity);
 
-    GLint mbIterationsLocation = glGetUniformLocation(shaderProgram, "mbIterations");
-    glUniform1f(mbIterationsLocation, mbIterations);
+    GLint animateLocation = glGetUniformLocation(shaderProgram, "animate");
+    glUniform1f(animateLocation, animate);
+
+    GLint modeLocations = glGetUniformLocation(shaderProgram, "mode");
+    glUniform1i(modeLocations, mode);
+}
+
+void mouseControl(){
+
 }
 
 int main(){
@@ -236,15 +243,15 @@ int main(){
         glUseProgram(shaderProgram);
 
         // clear background
-        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // sending vertices to the shader
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-//        cameraOrigin = vec3(cameraOrigin.x, cameraOrigin.y, cameraOrigin.z+0.1);
-        mbIterations += 0.01;
+//        cameraOrigin = vec3(cameraOrigin.x, cameraOrigin.y, cameraOrigin.z+0.01);
+        animate = glfwGetTime();
         sendDataToShader(shaderProgram);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)

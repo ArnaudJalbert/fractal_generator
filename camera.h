@@ -10,7 +10,7 @@
  */
 
 // origin of the camera -> Point
-vec3 cameraOrigin = vec3(0, 0, 3);
+vec3 cameraOrigin = vec3(0, 0.2, 2);
 
 // lookat direction of the camera -> vector
 vec3 cameraLookat = normalize(vec3(0,0,-1));
@@ -22,7 +22,7 @@ vec3 cameraUp = vec3(0,1,0);
 vec3 cameraRight = vec3(1,0,0);
 
 // field of view -> degrees
-float fov = 1.5f;
+float fov = 1.2;
 
 mat4 view = lookAt(cameraOrigin,
                    cameraLookat,

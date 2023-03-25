@@ -2,7 +2,7 @@
 
 // raymarch settings
 #define MAX_RAYMARCH_STEPS 1024
-#define EPSILON 0.001f
+#define EPSILON 0.001
 #define MAX_DISTANCE 150
 // utils
 #define INFINITY 999999999
@@ -13,21 +13,36 @@
 #define FLOOR_PLANE_NORMAL vec3(0,1,0)
 // shadows
 #define MIN_SHADOW 1
-#define MAX_SHADOW 5
-#define PENUMBRA_FACTOR 8
+#define MAX_SHADOW 50
+#define PENUMBRA_FACTOR 74
 // ambient occlusion
 #define AO_STEPS 10
 #define AO_STEP_SIZE 0.01f
 #define AO_INTENSITY 1.0f
 // mandelbulb
 #define MB_REPETITIONS 10
-#define MB_ITERATIONS 31
+#define MB_ITERATIONS 5
 #define MB_BAILOUT 2.0
+// menger sponge
+#define MS_REPETITIONS 4
+#define MS_SCALE vec3(1)
+#define MS_RADIUS 0.1
+#define MS_ITERATIONS 3.7f
+// julia
+#define JUL_REPETITIONS 7
+#define M 0.7
+
+// ---- MODE -----
+#define SPHERE_MODE 0
+#define MANDELBULB_MODE 1
+#define MENGER_CUBE_MODE 2
+#define MENGER_OCTAHEDRON_MODE 2
 
 
 smooth in vec3 fragPosition; // position of the fragment
 out vec4 outColor; // outputted color
 
+// camera
 uniform vec2 resolution;
 uniform float aspectRatio;
 uniform vec3 cameraOrigin;
@@ -38,72 +53,12 @@ uniform float fov;
 uniform vec3 lightPosition;
 uniform float lightIntensity;
 
-uniform float mbIterations;
+// mandelbulb
+uniform float animate;
 
+// mode
+uniform int mode;
 
-/*
-SDF of the mandelbulb fractals
-Computes the distance from a point to the closest
-*/
-float mandelbulb (vec3 position) {
-
-    // zeta variable to be computed
-    vec3 zeta = position;
-    //derivative of the mandelbulb
-    float dr = 1.0;
-    // current distance from the origin
-    float r = 0.0;
-
-    for (int i = 0; i < MB_REPETITIONS; i++) {
-
-        // convert to polar coordinates
-        r = length (zeta);
-        if (r > MB_BAILOUT) break; // check if the distance from the fractal is too far
-        float phi = acos (zeta.z / r);
-        float theta = atan (zeta.y, zeta.x);
-        dr = pow (r, mbIterations - 1.0) * mbIterations * dr + 1.0;
-
-        // scale and rotate the point
-        float zr = pow (r, mbIterations);
-        phi = phi * mbIterations;
-        theta = theta * mbIterations;
-
-        // converting back to euclidean coordinatees
-        float x = sin (phi) * cos(theta);
-        float y = sin(theta) * sin(phi);
-        float z = cos(phi);
-
-        // scale with r
-        zeta = zr * vec3 (x,y,z);
-        // march over the position
-        zeta += position;
-    }
-
-    // estimating the distance with Douady-Hubbard Potential(
-    float dst = 0.5 * log (r) * r / dr;
-
-    // current distance from ray
-    return dst;
-}
-
-/*
-Computes the distance from a point to a sphere
-p: point of the ray -> vec3
-r: radius of the sphere -> float
-*/
-float sphere(vec3 p, float r){
-    return length(p)-r;
-}
-
-/*
-Computes the distance from a point to a plane
-p: point of the ray -> vec3
-n: normal of the plane(normalized) -> vec3
-*/
-float floorPlane( vec3 p, vec3 n)
-{
-    return dot(p,n) + 0.75;
-}
 
 // Mod Position Axis
 float modAxis (inout float p, float size)
@@ -160,6 +115,173 @@ mat3 rotateZ(float theta) {
     );
 }
 
+float maxcomp(in vec3 p ) { return max(p.x,max(p.y,p.z));}
+
+// computations for quaternions
+
+// to square a quaternion
+vec4 quaternionSquare(vec4 a)
+{
+    return vec4(a.x*a.x - a.y*a.y - a.z*a.z - a.w*a.w,
+                2.0 * a.x * a.y,
+                2.0 * a.x * a.z,
+                2.0 * a.x * a.w );
+}
+
+// multiply two quaternions
+vec4 quaternionMultiply(vec4 a, vec4 b)
+{
+    return vec4(a.x * b.x - a.y * b.y - a.z * b.z - a.w * b.w,
+                a.y * b.x + a.x * b.y + a.z * b.w - a.w * b.z,
+                a.z * b.x + a.x * b.z + a.w * b.y - a.y * b.w,
+                a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y );
+
+}
+
+// length of quaternion
+float quaternionLength(vec4 q)
+{
+    return dot(q,q);
+}
+
+/*
+SDF of round box used for menger sponge
+*/
+float roundbox( vec3 p, vec3 b, float r ){
+    vec3 q = abs(p) - b;
+    return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - r;
+}
+
+// julia based on iq's implementation
+float julia(vec3 p)
+{
+
+    // c parameter
+    vec4 c = 0.5*vec4(cos(animate),cos(animate*1.1),cos(animate*2.3),cos(animate*3.1));
+
+    // zeta variable
+    vec4 zeta = vec4( p, 0.0 );
+
+    // scale factor
+    float md2 = 1.0;
+    // scale step
+    float mz2 = dot(zeta, zeta);
+
+    for(int i=0;i<JUL_REPETITIONS;i++)
+    {
+        // scaling
+        md2 *= 4.0 * mz2;
+
+        // new zeta
+        zeta = quaternionSquare(zeta) + c;
+
+        // new scale step
+        mz2 = quaternionLength(zeta);
+
+        if(mz2>4.0)
+        {
+            break;
+        }
+    }
+
+    return 0.25*sqrt(mz2/md2)*log(mz2);
+}
+
+float mengerSponge(vec3 p){
+
+    // distance from base box
+    float d = roundbox(p, MS_SCALE, MS_RADIUS+2);
+    float s = sin(animate*0.5);
+
+    for(int i = 0; i < MS_REPETITIONS; i++){
+
+        // transformation of the fractal
+        p = p * rotateX(animate*0.1);
+        p = p * rotateY(animate*0.1);
+        p = p * rotateZ(animate*0.1);
+
+        vec3 a = mod( p*s, 2.0 )-1.0;
+
+        //
+        s *= MS_ITERATIONS;
+        vec3 r = abs(1.0 - 3.0*abs(a));
+        float da = max(r.x,r.y);
+        float db = max(r.y,r.z);
+        float dc = max(r.z,r.x);
+        float c = (min(da,min(db,dc))-1.0)/s;
+
+        d = max(d,c);
+    }
+
+    return d;
+}
+
+/*
+SDF of the mandelbulb fractals
+Computes the distance from a point to the closest
+*/
+float mandelbulb (vec3 p) {
+
+    // zeta variable to be computed
+    vec3 zeta = p;
+    //derivative of the mandelbulb
+    float dr = 1.0;
+    // current distance from the origin
+    float r = 0.0;
+
+    float mbIterations = mod(animate + MB_ITERATIONS, 20);
+
+    for (int i = 0; i < MB_REPETITIONS; i++) {
+
+        // convert to polar coordinates
+        r = length (zeta);
+        if (r > MB_BAILOUT) break; // check if the distance from the fractal is too far
+        float phi = acos (zeta.z / r);
+        float theta = atan (zeta.y, zeta.x);
+        dr = pow (r, mbIterations - 1.0) * mbIterations * dr + 1.0;
+
+        // scale and rotate the point
+        float zr = pow (r, mbIterations);
+        phi = phi * mbIterations;
+        theta = theta * mbIterations;
+
+        // converting back to euclidean coordinatees
+        float x = sin (phi) * cos(theta);
+        float y = sin(theta) * sin(phi);
+        float z = cos(phi);
+
+        // scale with r
+        zeta = zr * vec3 (x,y,z) * rotateY(animate) * rotateZ(animate * 0.5);
+        // march over the position
+        zeta += p;
+    }
+
+    // estimating the distance with Douady-Hubbard Potential(
+    float dst = 0.5 * log (r) * r / dr;
+
+    // current distance from ray
+    return dst;
+}
+
+/*
+Computes the distance from a point to a sphere
+p: point of the ray -> vec3
+r: radius of the sphere -> float
+*/
+float sphere(vec3 p, float r){
+    return length(p)-r;
+}
+
+/*
+Computes the distance from a point to a plane
+p: point of the ray -> vec3
+n: normal of the plane(normalized) -> vec3
+*/
+float floorPlane( vec3 p, vec3 n)
+{
+    return dot(p,n) + 0.75;
+}
+
 /*
 Returns the closest distance from a point
 p: point -> vec3
@@ -169,31 +291,35 @@ float map(vec3 p){
     // we first make all the transofrmation we wish to do
     // rotations, translations, scaling, mod repeat...
 
-//    modAxis(p.x, 2);
-//    modAxis(p.y, 2);
+//    modAxis(p.x, 5);
+//    modAxis(p.y, 5);
+//    modAxis(p.z, 5);
 
-    float offset = mbIterations * 0.25;
+    float offset = animate * 0.25;
     mat3 rotateZ = rotateZ(offset);
 
     p = p * rotateZ;
 
     mat3 rotateY = rotateY(offset);
 
-    p = p* rotateY;
-
+    p = p * rotateY;
 
 
     // current smallest distance
     float d = INFINITY;
 
-//    d = sphere(p - vec3(0,0,-1.5), 0.75 );
-    d = mandelbulb(p - vec3(0,0, 0));
+    if(mode == SPHERE_MODE)
+        d = sphere(p, 0.75 );
 
-    // floor plane
+    if(mode == MANDELBULB_MODE)
+        d = mandelbulb(p);
 
-//    float floorPlane = floorPlane(p,FLOOR_PLANE_NORMAL);
-//
-//    d = min(d, floorPlane);
+    if(mode == MENGER_CUBE_MODE ||
+       mode == MENGER_OCTAHEDRON_MODE){
+        d = mengerSponge(p);
+    }
+
+//    d = julia(p);
 
     return d;
 }
@@ -203,7 +329,7 @@ From a ray origin and direction, it checks if that ray intersects with a geometr
 ro: ray origin -> vec3
 rd: ray direction -> vec3
 */
-bool raymarching(vec3 ro, vec3 rd, out vec3 p){
+bool raymarching(vec3 ro, vec3 rd, out vec3 p, out float d){
 
     // total distance traveled by ray
     float dt = 0;
@@ -219,7 +345,7 @@ bool raymarching(vec3 ro, vec3 rd, out vec3 p){
         p = ro + rd * dt;
 
         // compute the closest point to the current raymarching position
-        float d = map(p);
+        d = map(p);
 
         if(d < EPSILON){
             return true;
@@ -241,11 +367,41 @@ p: point -> vec3
 vec3 getNormal(vec3 p){
 
     vec3 normal = vec3(map(p+NORMAL_OFFSET.xyy) - map(p-NORMAL_OFFSET.xyy),
-                  map(p+NORMAL_OFFSET.yxy) - map(p-NORMAL_OFFSET.yxy),
-                  map(p+NORMAL_OFFSET.yyx) - map(p-NORMAL_OFFSET.yyx)
+                      map(p+NORMAL_OFFSET.yxy) - map(p-NORMAL_OFFSET.yxy),
+                      map(p+NORMAL_OFFSET.yyx) - map(p-NORMAL_OFFSET.yyx)
                   );
 
     return normalize(normal);
+}
+
+vec3 juliaNormal(vec3 p){
+
+    vec4 z = vec4(p,0.0);
+
+    vec4 c = 0.5*vec4(cos(animate),cos(animate*1.1),cos(animate*2.3),cos(animate*3.1));
+
+    // identity derivative
+    mat4x4 J = mat4x4(1,0,0,0,
+    0,1,0,0,
+    0,0,1,0,
+    0,0,0,1 );
+
+    for(int i=0; i<JUL_REPETITIONS; i++)
+    {
+        // chain rule of jacobians (removed the 2 factor)
+        J = J*mat4x4(z.x, -z.y, -z.z, -z.w,
+        z.y,  z.x,  0.0,  0.0,
+        z.z,  0.0,  z.x,  0.0,
+        z.w,  0.0,  0.0,  z.x);
+
+        // z -> z2 + c
+        z = quaternionSquare(z) + c;
+
+        if(quaternionLength(z)>4.0) break;
+    }
+
+    return normalize( (J*z).xyz );
+
 }
 
 /*
@@ -354,8 +510,10 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
 
     vec3 p; // point of intersection
 
+    float d; // distance from ray origin
+
     // check if there is an interesection woth geometry
-    bool intersection = raymarching(ro, rd, p);
+    bool intersection = raymarching(ro, rd, p, d);
 
     // check if there is an intersection
     if(intersection){
@@ -364,6 +522,8 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
 
         // computing the normal of the point
         vec3 normal = getNormal(p);
+
+//        vec3 normal = juliaNormal(p);
 
         // direction of the light
         vec3 lightDirection = getLightDirection(p);
@@ -378,7 +538,7 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
     }
     else{
         // TODO define default BG color
-        color = vec3(1,1,1);
+        color = vec3(0.1,0.1,0.1);
     }
 
     return color;
