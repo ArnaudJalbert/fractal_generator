@@ -2,7 +2,7 @@
 
 // raymarch settings
 #define MAX_RAYMARCH_STEPS 1024
-#define EPSILON 0.001
+#define EPSILON 0.004
 #define MAX_DISTANCE 150
 // utils
 #define INFINITY 999999999
@@ -32,13 +32,13 @@
 #define JUL_REPETITIONS 7
 #define M 0.7
 // octahedron
-#define OH_SCALE 4
+#define OH_SCALE 2
 
 // ---- MODE -----
 #define SPHERE_MODE 0
 #define MANDELBULB_MODE 1
 #define MENGER_CUBE_MODE 2
-#define MENGER_OCTAHEDRON_MODE 2
+#define MENGER_OCTAHEDRON_MODE 3
 
 
 smooth in vec3 fragPosition; // position of the fragment
@@ -61,6 +61,11 @@ uniform float animate;
 // mode
 uniform int mode;
 
+// repeat shapes
+uniform int repeat;
+
+// color of fractal
+uniform vec3 mainColor;
 
 // Mod Position Axis
 float modAxis (inout float p, float size)
@@ -70,6 +75,13 @@ float modAxis (inout float p, float size)
     p = mod(p+halfsize,size)-halfsize;
     p = mod(-p+halfsize,size)-halfsize;
     return c;
+}
+
+// Rotation matrix around the x axis
+// inverting it natively
+vec3 translate(float x, float y, float z) {
+
+    return vec3(x,y,z);
 }
 
 // Rotation matrix around the x axis
@@ -162,6 +174,24 @@ float octahedron( vec3 p)
     return (p.x+p.y+p.z-OH_SCALE)*0.57735027;
 }
 
+float DE(vec3 z)
+{
+
+    float Scale = 2;
+    float Offset = 3;
+
+    float r;
+    int n = 0;
+    while (n < 10) {
+        if(z.x+z.y<0) z.xy = -z.yx; // fold 1
+        if(z.x+z.z<0) z.xz = -z.zx; // fold 2
+        if(z.y+z.z<0) z.zy = -z.yz; // fold 3
+        z = z*Scale - Offset*(Scale-1.0);
+        n++;
+    }
+    return (length(z) ) * pow(Scale, -float(n));
+}
+
 // julia based on iq's implementation
 float julia(vec3 p)
 {
@@ -197,32 +227,51 @@ float julia(vec3 p)
     return 0.25*sqrt(mz2/md2)*log(mz2);
 }
 
+float cross(vec3 p){
+
+    float da = roundbox(p, MS_SCALE, MS_RADIUS);
+    float db = roundbox(p, MS_SCALE, MS_RADIUS);
+    float dc = roundbox(p, MS_SCALE, MS_RADIUS);
+
+    return min(da,min(db,dc));
+}
+
 float mengerSponge(vec3 p){
 
     float d;
 
     // distance from base box
-    if(mode ==2 )
-        d = roundbox(p, MS_SCALE, MS_RADIUS+2);
-    if(mode == 3)
+    if(mode == MENGER_CUBE_MODE)
+        d = roundbox(p, MS_SCALE, MS_RADIUS);
+    if(mode == MENGER_OCTAHEDRON_MODE)
         d = octahedron(p);
     float s = sin(animate*0.1);
 
     for(int i = 0; i < MS_REPETITIONS; i++){
 
+        float slowdown = 0.01;
+
         // transformation of the fractal
-        p = p * rotateX(animate*0.1);
-        p = p * rotateY(animate*0.1);
-        p = p * rotateZ(animate*0.1);
+        p = p * rotateX(animate * slowdown);
+        p = p * rotateY(animate * slowdown);
+        p = p * rotateZ(animate * slowdown);
 
-        vec3 a = mod( p*s, 2.0 )-1.0;
+        p = p + translate(animate * slowdown, animate * slowdown, animate * slowdown);
 
-        //
+        vec3 a = mod( p * s, 2.0 )-1.0;
+
+        // scaling
         s *= MS_ITERATIONS;
-        vec3 r = abs(1.0 - 3.0*abs(a));
+
+
+        vec3 r = abs(2.0 - 3.0*abs(a));
+
+        // derive the new coordinate
         float da = max(r.x,r.y);
         float db = max(r.y,r.z);
         float dc = max(r.z,r.x);
+
+        //
         float c = (min(da,min(db,dc))-1.0)/s;
 
         d = max(d,c);
@@ -306,11 +355,13 @@ float map(vec3 p){
     // we first make all the transofrmation we wish to do
     // rotations, translations, scaling, mod repeat...
 
-//    modAxis(p.x, 5);
-//    modAxis(p.y, 5);
-//    modAxis(p.z, 5);
+    if(repeat == 1){
+        modAxis(p.x, 5);
+        modAxis(p.z, 5);
+        modAxis(p.y, 5);
+    }
 
-    float offset = animate * 0.25;
+    float offset = animate * 0.01;
     mat3 rotateZ = rotateZ(offset);
 
     p = p * rotateZ;
@@ -318,7 +369,6 @@ float map(vec3 p){
     mat3 rotateY = rotateY(offset);
 
     p = p * rotateY;
-
 
     // current smallest distance
     float d = INFINITY;
@@ -333,6 +383,8 @@ float map(vec3 p){
        mode == MENGER_OCTAHEDRON_MODE){
         d = mengerSponge(p);
     }
+
+    d = DE(p);
 
 //    d = julia(p);
 
@@ -532,7 +584,6 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
 
     // check if there is an intersection
     if(intersection){
-        // TODO calculate the shading with the information
         // color of the point
 
         // computing the normal of the point
@@ -563,7 +614,7 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
 void main(){
 
     // color of the pixel
-    vec3 color = vec3(0,1,1);
+    vec3 color = mainColor;
 
     // render the color of the pixel
     color = render(fragPosition, color);

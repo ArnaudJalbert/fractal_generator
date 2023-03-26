@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <random>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -30,5 +31,14 @@ int mode = 1;
 
 // to animate
 float animate = 1;
+
+// to repeat
+int repeat = 0;
+
+// main color of the fractal
+vec3 mainColor = vec3(1,1,1);
+
+std::mt19937 rng; // Random number generator
+std::uniform_real_distribution<float> dist(0.0f, 1.0f); // Uniform distribution between 0 and 1
 
 #endif //FRACTAL_GENERATOR_INIT_H

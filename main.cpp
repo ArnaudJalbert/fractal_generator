@@ -2,7 +2,6 @@
 #include "init.h"
 #include "camera.h"
 #include "light.h"
-#include "mandelbulb.h"
 
 using namespace std;
 
@@ -135,8 +134,14 @@ void sendDataToShader(unsigned int shaderProgram){
     GLint animateLocation = glGetUniformLocation(shaderProgram, "animate");
     glUniform1f(animateLocation, animate);
 
-    GLint modeLocations = glGetUniformLocation(shaderProgram, "mode");
-    glUniform1i(modeLocations, mode);
+    GLint modeLocation = glGetUniformLocation(shaderProgram, "mode");
+    glUniform1i(modeLocation, mode);
+
+    GLint repeatLocation = glGetUniformLocation(shaderProgram, "repeat");
+    glUniform1i(repeatLocation, repeat);
+
+    GLint colorLocation = glGetUniformLocation(shaderProgram, "mainColor");
+    glUniform3fv(colorLocation, 1, value_ptr(mainColor));
 }
 
 void wasdControl(GLFWwindow* window){
@@ -187,6 +192,13 @@ void mouseControl(GLFWwindow* window, double xpos, double ypos){
     cameraUp = glm::normalize(glm::cross(cameraRight, cameraLookat));
 }
 
+void scrollControl(GLFWwindow* window, double xoffset, double yoffset)
+{
+    rng.seed(std::chrono::system_clock::now().time_since_epoch().count());
+
+    mainColor = vec3(dist(rng),dist(rng),dist(rng));
+}
+
 void switchFractals(GLFWwindow* window){
 
     if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
@@ -199,6 +211,15 @@ void switchFractals(GLFWwindow* window){
     if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) {
         mode = 3;
         animate = 0;
+    }
+
+
+    // repeat
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
+        if (repeat == 1)
+            repeat = 0;
+        else
+            repeat = 1;
     }
 
 }
@@ -290,6 +311,7 @@ int main(){
     // mouse control
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetCursorPosCallback(window, reinterpret_cast<GLFWcursorposfun>(mouseControl));
+    glfwSetScrollCallback(window, scrollControl);
 
     sendDataToShader(shaderProgram);
 
