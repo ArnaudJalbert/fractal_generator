@@ -2,104 +2,9 @@
 #include "init.h"
 #include "camera.h"
 #include "light.h"
+#include "setup.cpp"
 
 using namespace std;
-
-void framebuffer_size_callback(GLFWwindow* window, int width, int height){
-    glViewport(0, 0, width, height);
-};
-
-void processInput(GLFWwindow *window)
-{
-    if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
-}
-
-void initWindowHint(){
-
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, MAJOR_VERSION);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, MINOR_VERSION);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-#ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
-
-}
-
-std::string readShaderFile(const char* filePath)
-{
-    std::ifstream shaderFile(filePath);
-    if (!shaderFile.is_open()) {
-        // handle error
-        return "";
-    }
-
-    std::stringstream shaderStream;
-    shaderStream << shaderFile.rdbuf();
-    shaderFile.close();
-
-    return shaderStream.str();
-}
-
-unsigned int initVertexShader(const string& shaderSource){
-
-    const char* source = shaderSource.c_str();
-
-    // vertex shader init
-    unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &source, NULL);
-    glCompileShader(vertexShader);
-
-    // check for shader compile errors
-    char infoLog[512];
-    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
-        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-        std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
-    }
-
-    return vertexShader;
-}
-
-unsigned int initFragmentShader(const string& shaderSource){
-
-    const char* source = shaderSource.c_str();
-
-    // fragment shader
-    unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &source, NULL);
-    glCompileShader(fragmentShader);
-    // check for shader compile errors
-    char infoLog[512];
-    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
-        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
-        std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
-    }
-
-    return fragmentShader;
-}
-
-unsigned int linkShaders(unsigned int vertexShader, unsigned int fragmentShader){
-    // link shaders
-    unsigned int shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-    // check for linking errors
-    char infoLog[512];
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if (!success) {
-        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
-        std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
-    }
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-
-    return shaderProgram;
-}
 
 void sendDataToShader(unsigned int shaderProgram){
     // addresses of all the uniforms variables of the shader program
@@ -188,8 +93,43 @@ void mouseControl(GLFWwindow* window, double xpos, double ypos){
     direction.z = sin(radians(camYaw)) * cos(radians(camPitch));
 
     cameraLookat = normalize(direction);
-    cameraRight = glm::normalize(glm::cross(cameraLookat, cameraUp));
-    cameraUp = glm::normalize(glm::cross(cameraRight, cameraLookat));
+    cameraRight = normalize(cross(cameraLookat, vec3(0.0f, 1.0f, 0.0f)));
+    cameraUp = normalize(cross(cameraRight, cameraLookat));
+}
+
+void arrowsControl(GLFWwindow* window){
+
+    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS){
+        camPitch += 1;
+
+        if(camPitch > 89.0f)
+            camPitch = 89.0f;
+        if(camPitch < -89.0f)
+            camPitch = -89.0f;
+    }
+    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS){
+        camPitch -= 1;
+
+        if(camPitch > 89.0f)
+            camPitch = 89.0f;
+        if(camPitch < -89.0f)
+            camPitch = -89.0f;
+    }
+    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS){
+        camYaw   += 1;
+    }
+    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS){
+        camYaw  -= 1;
+    }
+
+    vec3 direction;
+    direction.x = cos(radians(camYaw)) * cos(radians(camPitch));
+    direction.y = sin(radians(camPitch));
+    direction.z = sin(radians(camYaw)) * cos(radians(camPitch));
+
+    cameraLookat = normalize(direction);
+    cameraRight = normalize(cross(cameraLookat, vec3(0.0f, 1.0f, 0.0f)));
+    cameraUp = normalize(cross(cameraRight, cameraLookat));
 }
 
 void scrollControl(GLFWwindow* window, double xoffset, double yoffset)
@@ -201,25 +141,59 @@ void scrollControl(GLFWwindow* window, double xoffset, double yoffset)
 
 void switchFractals(GLFWwindow* window){
 
-    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
         mode = 1;
+        cameraOrigin = vec3(0,0,3);
+    }
     if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
         mode = 2;
-        animate = 0;
-        cameraOrigin = vec3(0,0,4);
+        cameraOrigin = vec3(0,0,12);
+        lightPosition = vec3(0,0,15);
     }
     if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) {
         mode = 3;
-        animate = 0;
+        cameraOrigin = vec3(0,0,10);
+    }
+    if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS) {
+        mode = 4;
+        cameraOrigin = vec3(0,0,0);
+    }
+    if (glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS) {
+        mode = 5;
+        cameraOrigin = vec3(0,0,6);
+    }
+    if (glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS) {
+        mode = 6;
+        cameraOrigin = vec3(0,0,15);
+        lightPosition = vec3(2,2,25);
+    }
+    if (glfwGetKey(window, GLFW_KEY_7) == GLFW_PRESS) {
+        mode = 7;
+        cameraOrigin = vec3(0,0,15);
+    }
+    if (glfwGetKey(window, GLFW_KEY_8) == GLFW_PRESS) {
+        mode = 8;
+        cameraOrigin = vec3(0,0,20);
+        lightPosition = vec3(5,2,10);
+    }
+    if (glfwGetKey(window, GLFW_KEY_9) == GLFW_PRESS){
+        mode = 9;
+        cameraOrigin = vec3(0,0,10);
+    }
+    if (glfwGetKey(window, GLFW_KEY_0) == GLFW_PRESS){
+        mode = 0;
+        cameraOrigin = vec3(0,0,7);
     }
 
 
     // repeat
     if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
-        if (repeat == 1)
-            repeat = 0;
-        else
-            repeat = 1;
+        repeat = 1;
+        animate = 0;
+    }
+    if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS) {
+        repeat = 0;
+        animate = 0;
     }
 
 }
@@ -230,7 +204,12 @@ int main(){
 
     initWindowHint();
 
+    cout << WIDTH << endl;
+    cout << HEIGHT << endl;
+
     GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "FractalGenerator", NULL, NULL);
+
+
 
     if (window == NULL)
     {
@@ -248,8 +227,12 @@ int main(){
         return -1;
     }
 
+    int screenWidth, screenHeight;
+
+    glfwGetFramebufferSize(window, &screenWidth, &screenHeight);
+
     // init the opengl window
-    glViewport(0, 0, WIDTH, HEIGHT);
+    glViewport(0, 0, screenWidth, screenHeight);
 
     // callbacks
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -340,6 +323,7 @@ int main(){
         animate = glfwGetTime();
 
         wasdControl(window);
+        arrowsControl(window);
         switchFractals(window);
 
         // updated data
