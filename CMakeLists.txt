@@ -3,6 +3,8 @@ project(fractal_generator)
 
 set(CMAKE_CXX_STANDARD 14)
 
+set(CMAKE_BUILD_TYPE Release)
+
 set(CMAKE_PREFIX_PATH opt/homebrew/include)
 
 include_directories(/opt/homebrew/include/)

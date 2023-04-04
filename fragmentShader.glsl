@@ -5,6 +5,7 @@ uniform sampler2D textureSampler;
 // raymarch settings
 #define MAX_RAYMARCH_STEPS 500
 float EPSILON = 0.001;
+float mixLength = 3.5;
 #define MAX_DISTANCE 150
 // utils
 #define INFINITY 999999999
@@ -236,13 +237,63 @@ SDF of ocatahedron used for menger sponge
 */
 float octahedron( vec3 p){
     p = abs(p);
-    return (p.x+p.y+p.z-OH_SCALE*5)*0.57735027;
+    return (p.x+p.y+p.z-OH_SCALE*3)*0.57735027;
 }
 
 //-------------
 // fractals sdfs
 
-float arnoFractal2(vec3 p){
+float foldingTransformer(vec3 p){
+
+    vec3 p0 = p;
+
+    float d;
+    for(int i = 0 ; i< 10; i++){
+
+        p = abs(p);
+
+        p = 2*p - vec3(4, 4, 4);
+
+        p.xyz = clamp(p.xyz, -1.5, 1.5) - p.xyz-2.75;
+
+        p.xyz = p.yzx;
+
+        p.xy -= (sin(animate*0.01));
+
+        p.z += 3;
+
+        p *= rotateZ(animate*0.1)*rotateY(animate*0.05);
+
+    }
+
+    return length(p)*pow(2, -float(10))-.5;
+}
+
+float liaison(vec3 p){
+
+    vec3 p0 = p;
+
+    float d;
+    for(int i = 0 ; i< 10; i++){
+
+        p = abs(p);
+
+        p = 2*p - vec3(4, 4, 4);
+
+        p.xyz = clamp(p.xyz, -0.25, 0.25) - p.xyz-2.75;
+
+        p.xz = p.zx;
+
+        p.xy += animate*0.1;
+
+        p *= rotateZ(animate*0.1)*rotateY(animate*0.05);
+
+    }
+
+    return length(p)*pow(2, -float(10))-.5;
+}
+
+float baloon(vec3 p){
 
     vec3 p0 = p;
 
@@ -268,7 +319,7 @@ float arnoFractal2(vec3 p){
     return length(p)*pow(2, -float(10))-.1;
 }
 
-float arnoFractal(vec3 p){
+float fungi(vec3 p){
 
     vec3 p0 = p;
 
@@ -282,7 +333,7 @@ float arnoFractal(vec3 p){
 
         p = p * rotateX(animate*0.05);
 
-        p = p - sin(vec3(animate*0.1));
+//        p = p - sin(vec3(animate*0.1));
 
         p.z += animate*0.001;
 
@@ -309,7 +360,6 @@ float soapBlob(vec3 p){
         p = p*scale + juliaOffset;
 
         p.xyz = p.zxy;
-//        p.z = p.z * cos(animate*0.01);
 
         float offset = mod(animate * 0.1, 10);
         p = p * rotateX(animate * 0.1);
@@ -317,10 +367,11 @@ float soapBlob(vec3 p){
 
         l=length(p);
     }
+
     return l*pow(scale, -float(10))-.25;
 }
 
-float try3(vec3 pos){
+float spaceStation(vec3 pos){
 
     // converting to 4d
     vec4 p = vec4(pos,1);
@@ -354,7 +405,7 @@ float try3(vec3 pos){
     return dist;
 }
 
-float try2(vec3 pos){
+float rollingRods(vec3 pos){
 
     // converting to 3d
     vec4 p = vec4(pos,1);
@@ -379,7 +430,7 @@ float try2(vec3 pos){
     return ((length(p.xyz) - abs(2.8 - 1.0)) / p.w - pow(abs(2.8), float(1-10)));
 }
 
-float try(vec3 pos){
+float cubeInception(vec3 pos){
 
     // converting to 3d
     vec4 p = vec4(pos,1);
@@ -413,7 +464,7 @@ float pyramids(vec3 z){
     float r;
 
     int n = 0;
-    int iterations = 10;
+    int iterations = 13;
 
     for(int i = 0; i < iterations; i++) {
 
@@ -423,47 +474,15 @@ float pyramids(vec3 z){
 
         z = z * scale - offset * (scale - 1.0);
 
-        z = z* rotateX(animate*0.05);
-        z = z* rotateY(animate*0.05);
-        z = z* rotateZ(animate*0.05);
+        z.y = z.y*cos(animate*0.001);
+
+        mat3 rotate = rotateX(animate*0.05) * rotateY(animate*0.05) * rotateZ(animate*0.05);
+
+        z = z * rotate;
     }
 
 
     return (length(z) ) * pow(scale, -float(iterations));
-}
-
-// julia based on iq's implementation
-float julia(vec3 p){
-
-    // c parameter
-    vec4 c = 0.5*vec4(cos(animate),cos(animate*1.1),cos(animate*2.3),cos(animate*3.1));
-
-    // zeta variable
-    vec4 zeta = vec4( p, 0.0 );
-
-    // scale factor
-    float md2 = 1.0;
-    // scale step
-    float mz2 = dot(zeta, zeta);
-
-    for(int i=0;i<JUL_REPETITIONS;i++)
-    {
-        // scaling
-        md2 *= 4.0 * mz2;
-
-        // new zeta
-        zeta = quaternionSquare(zeta) + c;
-
-        // new scale step
-        mz2 = quaternionLength(zeta);
-
-        if(mz2>4.0)
-        {
-            break;
-        }
-    }
-
-    return 0.25*sqrt(mz2/md2)*log(mz2);
 }
 
 float cross(vec3 p){
@@ -481,7 +500,7 @@ float mengerSponge(vec3 p){
 
     // distance from base box
     if(mode == MENGER_CUBE_MODE){
-        d = roundbox(p, MS_SCALE*8, MS_RADIUS);
+        d = roundbox(p, MS_SCALE*4, MS_RADIUS);
     }
     if(mode == MENGER_OCTAHEDRON_MODE)
         d = octahedron(p);
@@ -613,9 +632,6 @@ float map(vec3 p){
     // current smallest distance
     float d = INFINITY;
 
-//    if(mode == SPHERE_MODE)
-//        d = sphere(p, 0.75 );
-
     if(mode == MANDELBULB_MODE){
         EPSILON = 0.0007;
         d = mandelbulb(p);
@@ -625,9 +641,9 @@ float map(vec3 p){
        mode == MENGER_OCTAHEDRON_MODE){
 
         if(mode == MENGER_OCTAHEDRON_MODE){
-            MOD_SCALE_X = 5;
-            MOD_SCALE_Y = 5;
-            MOD_SCALE_Z = 5;
+            MOD_SCALE_X = 15;
+            MOD_SCALE_Y = 15;
+            MOD_SCALE_Z = 15;
             MOD_X = true;
             MOD_Y = true;
             MOD_Z = true;
@@ -638,26 +654,24 @@ float map(vec3 p){
 
     if(mode == PYRAMID_MODE){
         EPSILON = 0.01;
-        MOD_SCALE_X = 20;
-        MOD_SCALE_Y = 20;
-        MOD_SCALE_Z = 20;
         d = pyramids(p);
     }
 
     if(mode == 5){
         EPSILON = 0.01;
-        d = try(p);
+        d = cubeInception(p);
     }
 
     if(mode == 6){
-        EPSILON = 0.01;
-        d = try2(p);
+        mixLength = 50;
+        EPSILON = 0.007;
+        d = rollingRods(p);
     }
 
     if(mode == 7){
 
         EPSILON = 0.01;
-        d = try3(p);
+        d = spaceStation(p);
     }
 
     if(mode == 8){
@@ -669,12 +683,20 @@ float map(vec3 p){
     }
 
     if(mode == 9){
-        d = arnoFractal(p);
+        EPSILON = 0.01;
+        d = fungi(p);
     }
 
     if(mode == 0){
-        d = arnoFractal2(p);
-//        d = sphere(p,1);
+        d = baloon(p);
+    }
+
+    if(mode == 11){
+        d = liaison(p);
+    }
+
+    if(mode == 12){
+        d = foldingTransformer(p);
     }
 
     return d;
@@ -728,37 +750,6 @@ vec3 getNormal(vec3 p){
                   );
 
     return normalize(normal);
-}
-
-// not working
-vec3 juliaNormal(vec3 p){
-
-    vec4 z = vec4(p,0.0);
-
-    vec4 c = 0.5*vec4(cos(animate),cos(animate*1.1),cos(animate*2.3),cos(animate*3.1));
-
-    // identity derivative
-    mat4x4 J = mat4x4(1,0,0,0,
-    0,1,0,0,
-    0,0,1,0,
-    0,0,0,1 );
-
-    for(int i=0; i<JUL_REPETITIONS; i++)
-    {
-        // chain rule of jacobians (removed the 2 factor)
-        J = J*mat4x4(z.x, -z.y, -z.z, -z.w,
-        z.y,  z.x,  0.0,  0.0,
-        z.z,  0.0,  z.x,  0.0,
-        z.w,  0.0,  0.0,  z.x);
-
-        // z -> z2 + c
-        z = quaternionSquare(z) + c;
-
-        if(quaternionLength(z)>4.0) break;
-    }
-
-    return normalize( (J*z).xyz );
-
 }
 
 /*
@@ -888,11 +879,11 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
 
         color = ambientOcclusion(p, normal) * color;
 
-        float px = 1.0*(2.0/resolution.y)*(1.0/3.5);
+        float px = 1.0*(2.0/resolution.y)*(1.0/300);
 
         color *= clamp(1.0-0.1*length(p),0.2,1.0);
 
-        color = mix( color, smoothstep( 0.0, 1.0, color ), 0.5 );
+        color = mix( color, smoothstep( 0.0, 1.0, color ), 0.3 );
 
         color += 0.15;
 

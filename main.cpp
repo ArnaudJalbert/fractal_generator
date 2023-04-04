@@ -144,14 +144,17 @@ void switchFractals(GLFWwindow* window){
     if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
         mode = 1;
         cameraOrigin = vec3(0,0,3);
+        lightPosition = vec3(1,1,2);
     }
     if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
         mode = 2;
+        glfwSetTime(0);
         cameraOrigin = vec3(0,0,12);
-        lightPosition = vec3(0,0,15);
+        lightPosition = vec3(0,0,20);
     }
     if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) {
         mode = 3;
+        glfwSetTime(0);
         cameraOrigin = vec3(0,0,10);
     }
     if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS) {
@@ -173,7 +176,7 @@ void switchFractals(GLFWwindow* window){
     }
     if (glfwGetKey(window, GLFW_KEY_8) == GLFW_PRESS) {
         mode = 8;
-        cameraOrigin = vec3(0,0,20);
+        cameraOrigin = vec3(0,0,14);
         lightPosition = vec3(5,2,10);
     }
     if (glfwGetKey(window, GLFW_KEY_9) == GLFW_PRESS){
@@ -183,6 +186,15 @@ void switchFractals(GLFWwindow* window){
     if (glfwGetKey(window, GLFW_KEY_0) == GLFW_PRESS){
         mode = 0;
         cameraOrigin = vec3(0,0,7);
+    }
+    if (glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS){
+        mode = 11;
+        cameraOrigin = vec3(0,0,7);
+    }
+    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS){
+        mode = 12;
+        cameraOrigin = vec3(0,0,12);
+        lightPosition = vec3(2,10,7);
     }
 
 
