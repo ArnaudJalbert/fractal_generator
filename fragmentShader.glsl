@@ -1,8 +1,11 @@
 #version 330 core
 
+uniform sampler2D textureSampler;
+
 // raymarch settings
-#define MAX_RAYMARCH_STEPS 1024
-#define EPSILON 0.001
+#define MAX_RAYMARCH_STEPS 500
+float EPSILON = 0.001;
+float mixLength = 3.5;
 #define MAX_DISTANCE 150
 // utils
 #define INFINITY 999999999
@@ -11,6 +14,13 @@
 #define NORMAL_OFFSET vec2(EPSILON, 0)
 // geometry
 #define FLOOR_PLANE_NORMAL vec3(0,1,0)
+// repeats
+float MOD_SCALE_X = 5;
+float MOD_SCALE_Y = 5;
+float MOD_SCALE_Z = 5;
+bool MOD_X = true;
+bool MOD_Y = true;
+bool MOD_Z = true;
 // shadows
 #define MIN_SHADOW 1
 #define MAX_SHADOW 50
@@ -31,13 +41,19 @@
 // julia
 #define JUL_REPETITIONS 7
 #define M 0.7
+// octahedron
+#define OH_SCALE 2
+// try
+#define MINRAD2 .25
+float minRad2 = clamp(MINRAD2, 1.0e-9, 1.0);
+
 
 // ---- MODE -----
 #define SPHERE_MODE 0
 #define MANDELBULB_MODE 1
 #define MENGER_CUBE_MODE 2
-#define MENGER_OCTAHEDRON_MODE 2
-
+#define MENGER_OCTAHEDRON_MODE 3
+#define PYRAMID_MODE 4
 
 smooth in vec3 fragPosition; // position of the fragment
 out vec4 outColor; // outputted color
@@ -59,8 +75,17 @@ uniform float animate;
 // mode
 uniform int mode;
 
+// repeat shapes
+uniform int repeat;
 
-// Mod Position Axis
+// color of fractal
+uniform vec3 mainColor;
+
+//---------------------
+// basic transormations
+
+// mod position axis
+// used to repeat a shape along an axis
 float modAxis (inout float p, float size)
 {
     float halfsize = size * 0.5;
@@ -70,14 +95,21 @@ float modAxis (inout float p, float size)
     return c;
 }
 
+// translation
+vec3 translate(float x, float y, float z) {
+    return vec3(x,y,z);
+}
+
 // Rotation matrix around the x axis
 // inverting it natively
 mat3 rotateX(float theta) {
+
     // cosine value
     float c = cos(theta);
+
     // sin value
     float s = sin(theta);
-    // see transformation matrices
+
     return mat3(
     vec3(1, 0, 0),
     vec3(0, c, -s),
@@ -88,11 +120,13 @@ mat3 rotateX(float theta) {
 // Rotation matrix around the y axis
 // inverting it natively
 mat3 rotateY(float theta) {
+
     // cosine value
     float c = cos(theta);
+
     // sin value
     float s = sin(theta);
-    // see transformation matrices
+
     return mat3(
     vec3(c, 0, s),
     vec3(0, 1, 0),
@@ -103,11 +137,13 @@ mat3 rotateY(float theta) {
 // Rotation matrix around the z axis
 // inverting it natively
 mat3 rotateZ(float theta) {
+
     // cosine value
     float c = cos(theta);
+
     // sin value
     float s = sin(theta);
-    // see transformation matrices
+
     return mat3(
     vec3(c, -s, 0),
     vec3(s, c, 0),
@@ -115,13 +151,47 @@ mat3 rotateZ(float theta) {
     );
 }
 
-float maxcomp(in vec3 p ) { return max(p.x,max(p.y,p.z));}
+// given two distance from sdfs, returns the distance of the union of them
+float shapeUnion(float a, float b){
+    return min(a, b);
+}
 
+// given two distance from sdfs, substracts shape a from b
+float shapeSubtraction(float a, float b){
+    return min(-a, b);
+}
+
+// given two distance from sdfs, returns the distance of the intersection of them
+float shapeIntersection(float a, float b){
+    return max(a,b);
+}
+
+// twists point p with a given strength
+vec3 twist(vec3 p, float strength){
+
+    float c = cos(strength * p.y);
+    float s = sin(strength * p.y);
+
+    // transformation matrix
+    mat2  m = mat2(c, -s,
+                   s, c);
+    vec2 xz = m * p.xz;
+    return vec3(xz, p.y);
+
+}
+
+// sin weighted displacement of a ditance
+float displacement(float dist, vec3 displacedP)
+{
+    float d1 = sin(20*displacedP.x)*sin(20*displacedP.y)*sin(20*displacedP.z);
+    return d1 + dist;
+}
+
+// ----------------------------
 // computations for quaternions
 
 // to square a quaternion
-vec4 quaternionSquare(vec4 a)
-{
+vec4 quaternionSquare(vec4 a){
     return vec4(a.x*a.x - a.y*a.y - a.z*a.z - a.w*a.w,
                 2.0 * a.x * a.y,
                 2.0 * a.x * a.z,
@@ -129,8 +199,7 @@ vec4 quaternionSquare(vec4 a)
 }
 
 // multiply two quaternions
-vec4 quaternionMultiply(vec4 a, vec4 b)
-{
+vec4 quaternionMultiply(vec4 a, vec4 b){
     return vec4(a.x * b.x - a.y * b.y - a.z * b.z - a.w * b.w,
                 a.y * b.x + a.x * b.y + a.z * b.w - a.w * b.z,
                 a.z * b.x + a.x * b.z + a.w * b.y - a.y * b.w,
@@ -139,9 +208,20 @@ vec4 quaternionMultiply(vec4 a, vec4 b)
 }
 
 // length of quaternion
-float quaternionLength(vec4 q)
-{
+float quaternionLength(vec4 q){
     return dot(q,q);
+}
+
+//---------------
+// primitive sdfs
+
+/*
+Computes the distance from a point to a sphere
+p: point of the ray -> vec3
+r: radius of the sphere -> float
+*/
+float sphere(vec3 p, float r){
+    return length(p)-r;
 }
 
 /*
@@ -152,62 +232,306 @@ float roundbox( vec3 p, vec3 b, float r ){
     return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - r;
 }
 
-// julia based on iq's implementation
-float julia(vec3 p)
-{
+/*
+SDF of ocatahedron used for menger sponge
+*/
+float octahedron( vec3 p){
+    p = abs(p);
+    return (p.x+p.y+p.z-OH_SCALE*3)*0.57735027;
+}
 
-    // c parameter
-    vec4 c = 0.5*vec4(cos(animate),cos(animate*1.1),cos(animate*2.3),cos(animate*3.1));
+//-------------
+// fractals sdfs
 
-    // zeta variable
-    vec4 zeta = vec4( p, 0.0 );
+float foldingTransformer(vec3 p){
 
-    // scale factor
-    float md2 = 1.0;
-    // scale step
-    float mz2 = dot(zeta, zeta);
+    vec3 p0 = p;
 
-    for(int i=0;i<JUL_REPETITIONS;i++)
-    {
-        // scaling
-        md2 *= 4.0 * mz2;
+    float d;
+    for(int i = 0 ; i< 10; i++){
 
-        // new zeta
-        zeta = quaternionSquare(zeta) + c;
+        p = abs(p);
 
-        // new scale step
-        mz2 = quaternionLength(zeta);
+        p = 2*p - vec3(4, 4, 4);
 
-        if(mz2>4.0)
-        {
-            break;
-        }
+        p.xyz = clamp(p.xyz, -1.5, 1.5) - p.xyz-2.75;
+
+        p.xyz = p.yzx;
+
+        p.xy -= (sin(animate*0.01));
+
+        p.z += 3;
+
+        p *= rotateZ(animate*0.1)*rotateY(animate*0.05);
+
     }
 
-    return 0.25*sqrt(mz2/md2)*log(mz2);
+    return length(p)*pow(2, -float(10))-.5;
+}
+
+float liaison(vec3 p){
+
+    vec3 p0 = p;
+
+    float d;
+    for(int i = 0 ; i< 10; i++){
+
+        p = abs(p);
+
+        p = 2*p - vec3(4, 4, 4);
+
+        p.xyz = clamp(p.xyz, -0.25, 0.25) - p.xyz-2.75;
+
+        p.xz = p.zx;
+
+        p.xy += animate*0.1;
+
+        p *= rotateZ(animate*0.1)*rotateY(animate*0.05);
+
+    }
+
+    return length(p)*pow(2, -float(10))-.5;
+}
+
+float baloon(vec3 p){
+
+    vec3 p0 = p;
+
+    float d;
+    for(int i = 0 ; i< 10; i++){
+
+        p = abs(p);
+
+        p = 2*p - vec3(3, 3, 3);
+
+        p *= rotateY(animate*0.01);
+
+        p *= rotateZ(i);
+
+        p.xyz = clamp(p.xyz, -0.1, 0.1) - p.xyz-0.25;
+
+        p.xy = p.yx;
+
+        p *= rotateX(animate*0.1);
+
+    }
+
+    return length(p)*pow(2, -float(10))-.1;
+}
+
+float fungi(vec3 p){
+
+    vec3 p0 = p;
+
+    for(int i = 0 ; i< 10; i++){
+
+        p = abs(p);
+
+        p = 2*p - vec3(3, 10, 3);
+
+        p = p * rotateZ(animate*0.1);
+
+        p = p * rotateX(animate*0.05);
+
+//        p = p - sin(vec3(animate*0.1));
+
+        p.z += animate*0.001;
+
+        p.xy = p.yx;
+    }
+
+    return length(p)*pow(2, -float(10))-.1;
+}
+
+float soapBlob(vec3 p){
+
+    float len = length(p);
+    float scale = 1.25;
+    int iterations = 20;
+    float l = 0.;
+
+    vec3 juliaOffset = vec3(-3.,-1.15,-.8);
+
+    for (int i=0; i<10; i++) {
+
+        p = abs(p);
+
+        // scale and offset the position
+        p = p*scale + juliaOffset;
+
+        p.xyz = p.zxy;
+
+        float offset = mod(animate * 0.1, 10);
+        p = p * rotateX(animate * 0.1);
+        p = p + translate(offset*0.1,0,0);
+
+        l=length(p);
+    }
+
+    return l*pow(scale, -float(10))-.25;
+}
+
+float spaceStation(vec3 pos){
+
+    // converting to 4d
+    vec4 p = vec4(pos,1);
+
+    // original p
+    vec4 p0 = p;
+
+
+    float defaultScale = 4;
+
+    vec4 scale = (vec4(defaultScale, defaultScale, defaultScale, abs(defaultScale)) / minRad2);
+
+    for (int i = 0; i < 10; i++)
+    {
+        p.xyz = clamp(p.xyz, -3.0, 2.5) * 1.5 - p.xyz;
+
+
+        float r2 = dot(p.xyz, p.xyz);
+
+        p *= clamp(max(minRad2/r2, minRad2), 0.0, 2.0);
+
+        // scale, translate
+        p = p*scale + p0;
+
+        p.xyz = p.xyz * rotateY(animate*0.07);
+
+    }
+
+    float dist = ((length(p.xyz) - abs(2.8 - 1.0)) / p.w - pow(abs(4.8), float(1-10)));
+
+    return dist;
+}
+
+float rollingRods(vec3 pos){
+
+    // converting to 3d
+    vec4 p = vec4(pos,1);
+    vec4 p0 = p;
+
+    float defaultScale = 2.8;
+
+    vec4 scale = (vec4(defaultScale, defaultScale, defaultScale, abs(defaultScale)) / minRad2);
+
+    for (int i = 0; i < 9; i++)
+    {
+        p.xyz = clamp(p.xyz, -3.0, 2.0) * 2.0 - p.xyz;
+        p.xyz = rotateX(animate*0.1) * p.xyz;
+
+        float r2 = dot(p.xyz, p.xyz);
+        p *= clamp(max(minRad2/r2, minRad2), 0.0, 1.0);
+
+        // scale, translate
+        p = p*scale + p0;
+
+    }
+    return ((length(p.xyz) - abs(2.8 - 1.0)) / p.w - pow(abs(2.8), float(1-10)));
+}
+
+float cubeInception(vec3 pos){
+
+    // converting to 3d
+    vec4 p = vec4(pos,1);
+    vec4 p0 = p;
+
+    float defaultScale = 2.8;
+
+    vec4 scale = (vec4(defaultScale, defaultScale, defaultScale, abs(defaultScale)) / minRad2);
+
+    for (int i = 0; i < 9; i++)
+    {
+        p.xyz = clamp(p.xyz, -1.0, 1.0) * 2.0 - p.xyz;
+        p.xyz = rotateX(animate*0.1) * p.xyz;
+        p.xyz *= rotateZ(0.1*animate);
+
+        float r2 = dot(p.xyz, p.xyz);
+        p *= clamp(max(minRad2/r2, minRad2), 0.0, 1.0);
+
+        // scale, translate
+        p = p*scale + p0;
+
+    }
+    return ((length(p.xyz) - abs(2.8 - 1.0)) / p.w - pow(abs(2.8), float(1-10)));
+}
+
+float pyramids(vec3 z){
+
+    // define parameters
+    float scale = 2;
+    float offset = 3;
+    float r;
+
+    int n = 0;
+    int iterations = 13;
+
+    for(int i = 0; i < iterations; i++) {
+
+        if(z.x+z.y<0) z.xy = -z.yx; // fold 1
+        if(z.x+z.z<0) z.xz = -z.zx; // fold 2
+        if(z.y+z.z<0) z.zy = -z.yz; // fold 3
+
+        z = z * scale - offset * (scale - 1.0);
+
+        z.y = z.y*cos(animate*0.001);
+
+        mat3 rotate = rotateX(animate*0.05) * rotateY(animate*0.05) * rotateZ(animate*0.05);
+
+        z = z * rotate;
+    }
+
+
+    return (length(z) ) * pow(scale, -float(iterations));
+}
+
+float cross(vec3 p){
+
+    float da = roundbox(p, MS_SCALE, MS_RADIUS);
+    float db = roundbox(p, MS_SCALE, MS_RADIUS);
+    float dc = roundbox(p, MS_SCALE, MS_RADIUS);
+
+    return min(da,min(db,dc));
 }
 
 float mengerSponge(vec3 p){
 
+    float d;
+
     // distance from base box
-    float d = roundbox(p, MS_SCALE, MS_RADIUS+2);
-    float s = sin(animate*0.5);
+    if(mode == MENGER_CUBE_MODE){
+        d = roundbox(p, MS_SCALE*4, MS_RADIUS);
+    }
+    if(mode == MENGER_OCTAHEDRON_MODE)
+        d = octahedron(p);
+    float s = sin(animate*0.01);
 
     for(int i = 0; i < MS_REPETITIONS; i++){
 
+        float slowdown = 0.01;
+
         // transformation of the fractal
-        p = p * rotateX(animate*0.1);
-        p = p * rotateY(animate*0.1);
-        p = p * rotateZ(animate*0.1);
+        p = p * rotateX(animate * slowdown);
+        p = p * rotateY(animate * slowdown);
+        p = p * rotateZ(animate * slowdown);
+        p.xyz = p.xzy;
 
-        vec3 a = mod( p*s, 2.0 )-1.0;
+        p = p + translate(animate * slowdown, animate * slowdown, animate * slowdown);
 
-        //
+        vec3 a = mod( p * s, 2.0 )-1.0;
+
+        // scaling
         s *= MS_ITERATIONS;
-        vec3 r = abs(1.0 - 3.0*abs(a));
+
+
+        vec3 r = abs(2.0 - 3.0*abs(a));
+
+        // derive the new coordinate
         float da = max(r.x,r.y);
         float db = max(r.y,r.z);
         float dc = max(r.z,r.x);
+
+        //
         float c = (min(da,min(db,dc))-1.0)/s;
 
         d = max(d,c);
@@ -229,7 +553,7 @@ float mandelbulb (vec3 p) {
     // current distance from the origin
     float r = 0.0;
 
-    float mbIterations = mod(animate + MB_ITERATIONS, 20);
+    float mbIterations = mod(animate, 20) + MB_ITERATIONS;
 
     for (int i = 0; i < MB_REPETITIONS; i++) {
 
@@ -264,26 +588,20 @@ float mandelbulb (vec3 p) {
 }
 
 /*
-Computes the distance from a point to a sphere
-p: point of the ray -> vec3
-r: radius of the sphere -> float
-*/
-float sphere(vec3 p, float r){
-    return length(p)-r;
-}
-
-/*
 Computes the distance from a point to a plane
 p: point of the ray -> vec3
 n: normal of the plane(normalized) -> vec3
 */
-float floorPlane( vec3 p, vec3 n)
-{
+float floorPlane( vec3 p, vec3 n){
     return dot(p,n) + 0.75;
 }
 
+//-----------------
+// rendering logic
+
 /*
 Returns the closest distance from a point
+Distance will be determined by the current mode
 p: point -> vec3
 */
 float map(vec3 p){
@@ -291,11 +609,18 @@ float map(vec3 p){
     // we first make all the transofrmation we wish to do
     // rotations, translations, scaling, mod repeat...
 
-//    modAxis(p.x, 5);
-//    modAxis(p.y, 5);
-//    modAxis(p.z, 5);
+    EPSILON = 0.001;
 
-    float offset = animate * 0.25;
+    if(repeat == 1){
+        if(MOD_X)
+            modAxis(p.x, MOD_SCALE_X);
+        if(MOD_Z)
+            modAxis(p.z, MOD_SCALE_Z);
+        if(MOD_Y)
+            modAxis(p.y, MOD_SCALE_Y);
+    }
+
+    float offset = animate * 0.1;
     mat3 rotateZ = rotateZ(offset);
 
     p = p * rotateZ;
@@ -304,22 +629,75 @@ float map(vec3 p){
 
     p = p * rotateY;
 
-
     // current smallest distance
     float d = INFINITY;
 
-    if(mode == SPHERE_MODE)
-        d = sphere(p, 0.75 );
-
-    if(mode == MANDELBULB_MODE)
+    if(mode == MANDELBULB_MODE){
+        EPSILON = 0.0007;
         d = mandelbulb(p);
+    }
 
     if(mode == MENGER_CUBE_MODE ||
        mode == MENGER_OCTAHEDRON_MODE){
+
+        if(mode == MENGER_OCTAHEDRON_MODE){
+            MOD_SCALE_X = 15;
+            MOD_SCALE_Y = 15;
+            MOD_SCALE_Z = 15;
+            MOD_X = true;
+            MOD_Y = true;
+            MOD_Z = true;
+        }
+        EPSILON = 0.001;
         d = mengerSponge(p);
     }
 
-//    d = julia(p);
+    if(mode == PYRAMID_MODE){
+        EPSILON = 0.01;
+        d = pyramids(p);
+    }
+
+    if(mode == 5){
+        EPSILON = 0.01;
+        d = cubeInception(p);
+    }
+
+    if(mode == 6){
+        mixLength = 50;
+        EPSILON = 0.007;
+        d = rollingRods(p);
+    }
+
+    if(mode == 7){
+
+        EPSILON = 0.01;
+        d = spaceStation(p);
+    }
+
+    if(mode == 8){
+        MOD_Z = false;
+        MOD_SCALE_X = 20;
+        MOD_SCALE_Y = MOD_SCALE_X;
+        EPSILON = 0.0001;
+        d = soapBlob(p);
+    }
+
+    if(mode == 9){
+        EPSILON = 0.01;
+        d = fungi(p);
+    }
+
+    if(mode == 0){
+        d = baloon(p);
+    }
+
+    if(mode == 11){
+        d = liaison(p);
+    }
+
+    if(mode == 12){
+        d = foldingTransformer(p);
+    }
 
     return d;
 }
@@ -372,36 +750,6 @@ vec3 getNormal(vec3 p){
                   );
 
     return normalize(normal);
-}
-
-vec3 juliaNormal(vec3 p){
-
-    vec4 z = vec4(p,0.0);
-
-    vec4 c = 0.5*vec4(cos(animate),cos(animate*1.1),cos(animate*2.3),cos(animate*3.1));
-
-    // identity derivative
-    mat4x4 J = mat4x4(1,0,0,0,
-    0,1,0,0,
-    0,0,1,0,
-    0,0,0,1 );
-
-    for(int i=0; i<JUL_REPETITIONS; i++)
-    {
-        // chain rule of jacobians (removed the 2 factor)
-        J = J*mat4x4(z.x, -z.y, -z.z, -z.w,
-        z.y,  z.x,  0.0,  0.0,
-        z.z,  0.0,  z.x,  0.0,
-        z.w,  0.0,  0.0,  z.x);
-
-        // z -> z2 + c
-        z = quaternionSquare(z) + c;
-
-        if(quaternionLength(z)>4.0) break;
-    }
-
-    return normalize( (J*z).xyz );
-
 }
 
 /*
@@ -504,7 +852,7 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
     // origin of the ray
     vec3 ro = cameraOrigin;
     // direction of the ray
-    vec3 rd = normalize(cameraLookat * fov +
+    vec3 rd = normalize(cameraLookat +
                         cameraRight * fragPosition.x * aspectRatio +
                         cameraUp * fragPosition.y);
 
@@ -517,13 +865,10 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
 
     // check if there is an intersection
     if(intersection){
-        // TODO calculate the shading with the information
         // color of the point
 
         // computing the normal of the point
         vec3 normal = getNormal(p);
-
-//        vec3 normal = juliaNormal(p);
 
         // direction of the light
         vec3 lightDirection = getLightDirection(p);
@@ -534,6 +879,13 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
 
         color = ambientOcclusion(p, normal) * color;
 
+        float px = 1.0*(2.0/resolution.y)*(1.0/300);
+
+        color *= clamp(1.0-0.1*length(p),0.2,1.0);
+
+        color = mix( color, smoothstep( 0.0, 1.0, color ), 0.3 );
+
+        color += 0.15;
 
     }
     else{
@@ -548,10 +900,11 @@ vec3 render(in vec3 fragPosition, inout vec3 color){
 void main(){
 
     // color of the pixel
-    vec3 color = vec3(0,1,1);
+    vec3 color = mainColor;
 
     // render the color of the pixel
     color = render(fragPosition, color);
+
 
     outColor = vec4(color, 1);
 }
