@@ -132,11 +132,30 @@ void arrowsControl(GLFWwindow* window){
     cameraUp = normalize(cross(cameraRight, cameraLookat));
 }
 
-void scrollControl(GLFWwindow* window, double xoffset, double yoffset)
-{
-    rng.seed(std::chrono::system_clock::now().time_since_epoch().count());
+//void scrollControl(GLFWwindow* window, double xoffset, double yoffset)
+//{
+//    rng.seed(std::chrono::system_clock::now().time_since_epoch().count());
+//
+//    mainColor = vec3(dist(rng),dist(rng),dist(rng));
+//}
 
-    mainColor = vec3(dist(rng),dist(rng),dist(rng));
+void mixColors()
+{
+    mainColor = vec3(red, green, blue);
+
+    if (colorWheel == 0){
+        red = (sin(animate * 0.7f) + 1.0f) * 0.5f;
+    }
+    else if (colorWheel == 1){
+        green = (sin(animate * 0.5f) + 1.0f) * 0.5f;
+    }
+    else if(colorWheel == 2){
+        blue = (sin(animate * 0.1f) + 1.0f) * 0.5f;
+    }
+
+    colorWheel = (colorWheel+1) % 3;
+    cout << colorWheel << endl;
+
 }
 
 void switchFractals(GLFWwindow* window){
@@ -219,7 +238,7 @@ int main(){
     cout << WIDTH << endl;
     cout << HEIGHT << endl;
 
-    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "FractalGenerator", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "FractalGenerator", glfwGetPrimaryMonitor(), NULL);
 
 
 
@@ -337,6 +356,7 @@ int main(){
         wasdControl(window);
         arrowsControl(window);
         switchFractals(window);
+        mixColors();
 
         // updated data
         sendDataToShader(shaderProgram);
