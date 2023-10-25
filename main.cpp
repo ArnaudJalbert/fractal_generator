@@ -238,7 +238,7 @@ int main(){
     cout << WIDTH << endl;
     cout << HEIGHT << endl;
 
-    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "FractalGenerator", glfwGetPrimaryMonitor(), NULL);
+    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "FractalGenerator", NULL, NULL);
 
 
 
@@ -325,7 +325,7 @@ int main(){
     // mouse control
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetCursorPosCallback(window, reinterpret_cast<GLFWcursorposfun>(mouseControl));
-    glfwSetScrollCallback(window, scrollControl);
+//    glfwSetScrollCallback(window, scrollControl);
 
     sendDataToShader(shaderProgram);
 
